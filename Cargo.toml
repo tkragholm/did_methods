@@ -1,0 +1,53 @@
+[package]
+name = "did_methods"
+version = "0.1.0"
+edition = "2024"
+authors = ["Tobias Kragholm"]
+license = "MIT OR Apache-2.0"
+description = "Reusable difference-in-differences primitives for event-study style analyses"
+autotests = false
+
+[features]
+default = []
+parity-tests = []
+hotpath = ["dep:hotpath", "hotpath/hotpath"]
+hotpath-alloc = ["hotpath", "hotpath/hotpath-alloc"]
+
+[dependencies]
+bon = "3"
+argmin = { git = "https://github.com/cloudsftp/argmin", branch = "update-faer-v24" }
+argmin-math = { git = "https://github.com/cloudsftp/argmin", package = "argmin-math", branch = "update-faer-v24", default-features = false, features = ["vec", "faer_v0_24"] }
+clarabel = "0.11.1"
+dyn-stack = "0.13.2"
+faer = { version = "0.24.0", features = ["nightly", "perf-warn"] }
+highs = "2.0.0"
+highs-sys = "1.14.2"
+itertools = "0.14"
+rand = "0.10.0"
+rayon = "1.11.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+statrs = "0.18.0"
+thiserror = "2.0.18"
+tracing = "0.1.41"
+hotpath = { version = "0.15.0", optional = true }
+once_map = "0.4.23"
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false }
+rand_distr = "0.6.0"
+rstest = "0.26"
+proptest = "1.6.0"
+
+[[bench]]
+name = "core_workflows"
+harness = false
+
+[[test]]
+name = "dataset_validation"
+path = "tests/dataset_validation.rs"
+
+[[test]]
+name = "parity"
+path = "tests/parity.rs"
+required-features = ["parity-tests"]

@@ -1,0 +1,8362 @@
+{
+  "meta": {
+    "source": "Authored R reference formulas on deterministic discrete-covariate fixture",
+    "note": "There is currently no official external DiD_CC R package wired into this parity harness. These reference values are computed from explicit score formulas on a deterministic fixture."
+  },
+  "aligned_constant_effect": {
+    "rows": [
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2.5,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 3.5,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4.5,
+        "covariates": [
+          2
+        ]
+      }
+    ],
+    "robust": {
+      "att": 1.5,
+      "se": 0.1185854122563142
+    },
+    "stationary": {
+      "att": 1.5,
+      "se": 0.06846531968814576
+    },
+    "hausman": {
+      "difference": 0,
+      "difference_se": 0.09682458365518543,
+      "statistic": 0,
+      "p_value": 1
+    }
+  },
+  "composition_shift": {
+    "rows": [
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 6,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 3,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 2,
+        "covariates": [
+          2
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 1,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": false,
+        "outcome": 1,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": false,
+        "post_period": true,
+        "outcome": 2,
+        "covariates": [
+          1
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": false,
+        "outcome": 0,
+        "covariates": [
+          0
+        ]
+      },
+      {
+        "treated": true,
+        "post_period": true,
+        "outcome": 4,
+        "covariates": [
+          1
+        ]
+      }
+    ],
+    "robust": {
+      "att": 2.321428571428572,
+      "se": 0.1813194171884596
+    },
+    "stationary": {
+      "att": 1.989285714285715,
+      "se": 0.09721792848818332
+    },
+    "hausman": {
+      "difference": -0.3321428571428571,
+      "difference_se": 0.1277531179550242,
+      "statistic": 6.75937930447379,
+      "p_value": 0.009325619274438535
+    }
+  }
+}
