@@ -481,6 +481,48 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_w
         ));
     }
 
+    // A single functional has nothing to be simultaneous about, so this must
+    // return exactly what the scalar FLCI returns -- and before this it did not.
+    //
+    // Both paths end up choosing a grid point from a 1000-point grid spanning the
+    // identified set padded by 20 standard errors, so the answer is quantised to
+    // roughly 1e-3 on this data. The prepared-branch path and the direct path
+    // reached that grid slightly differently and landed about two steps apart:
+    // lower bounds agreed to 12 decimals while upper bounds differed by 1.8e-3.
+    // Quantised disagreement cannot be closed by tightening anything, only by
+    // having one path stop re-deriving what the other already computes.
+    //
+    // `joint_pointwise_confidence_level` already special-cases `n == 1` and
+    // returns the nominal level with no calibration, so delegating here changes
+    // no inference: the returned `pointwise_confidence_level` and critical value
+    // are the ones this function would have reported anyway.
+    if problem.post_weight_sets.len() == 1 {
+        let post_weights = &problem.post_weight_sets[0];
+        let original = &problem.originals[0];
+        let identified_set = &problem.identified_sets[0];
+        let conditional = compute_relative_magnitude_confidence_set_with_config(
+            &problem.input,
+            post_weights,
+            problem.mbar,
+            pointwise_inference,
+            pointwise_config,
+        )?;
+        return Ok(RelativeMagnitudeMultiFlciResult {
+            confidence_level: problem.inference.confidence_level,
+            pointwise_confidence_level,
+            calibrated_max_t_critical_value,
+            method: joint_config.method,
+            points: vec![RelativeMagnitudeMultiFlciPoint {
+                post_weights: post_weights.clone(),
+                flci: (conditional.lb, conditional.ub),
+                original_ci: original.ci,
+                identified_set: (identified_set.lb, identified_set.ub),
+                null_value: 0.0,
+                robustly_significant: conditional.lb > 0.0 || conditional.ub < 0.0,
+            }],
+        });
+    }
+
     let points = problem
         .post_weight_sets
         .par_iter()
