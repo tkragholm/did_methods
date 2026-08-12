@@ -338,7 +338,15 @@ struct HonestRelativeMagnitudeRef {
 
 #[derive(Deserialize)]
 struct HonestRelativeMagnitudeFixture {
-    #[serde(default)]
+    // `l_vec` is the R name for this vector, and what generate_reference_data.R
+    // writes. Without the alias serde found no `post_weights`, `default` handed
+    // back an empty Vec, and eight tests died downstream at "post_weights length
+    // 0 does not match number of post periods 4" — a fixture-schema mismatch
+    // wearing the costume of an estimator bug.
+    //
+    // `default` stays: honest_did_rm_ref.json genuinely carries no weight vector
+    // and the tests reading it supply their own.
+    #[serde(default, alias = "l_vec")]
     post_weights: Vec<f64>,
     original: HonestOriginalRef,
     relative_magnitude: Vec<HonestRelativeMagnitudeRef>,
@@ -361,6 +369,7 @@ struct HonestJointPathRefPoint {
 #[derive(Deserialize)]
 struct HonestJointPathRef {
     meta: HonestJointPathRefMeta,
+    #[serde(alias = "l_vecs")]
     post_weight_sets: Vec<Vec<f64>>,
     points: Vec<HonestJointPathRefPoint>,
 }
@@ -368,6 +377,7 @@ struct HonestJointPathRef {
 #[derive(Deserialize)]
 struct HonestDirectionalRefDirection {
     name: String,
+    #[serde(alias = "l_vec")]
     post_weights: Vec<f64>,
 }
 
@@ -387,6 +397,7 @@ struct HonestDirectionalRef {
 
 #[derive(Deserialize)]
 struct HonestMultiFlciScaffold {
+    #[serde(alias = "l_vecs")]
     post_weight_sets: Vec<Vec<f64>>,
 }
 
