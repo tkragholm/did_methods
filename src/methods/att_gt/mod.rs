@@ -1,3 +1,4 @@
+#[cfg(feature = "honest")]
 use crate::inference::sensitivity::{
     HonestAssessment, HonestEventStudyInput, HonestSensitivity, HonestWorkflowConfig,
     assess_honest_event_study_functional_with_config,
@@ -60,6 +61,7 @@ impl EventStudyResult {
 }
 
 /// Robust assessment result for a post-treatment window.
+#[cfg(feature = "honest")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowAssessment {
     pub assessment: HonestAssessment,
@@ -67,6 +69,7 @@ pub struct WindowAssessment {
     pub requested_range: (i32, i32),
 }
 
+#[cfg(feature = "honest")]
 impl WindowAssessment {
     /// Require that all requested periods in the window are present in the data.
     ///
@@ -153,6 +156,7 @@ impl EventTimeResult {
     ///
     /// Returns an error when there are no pre-treatment periods or covariance
     /// construction fails.
+    #[cfg(feature = "honest")]
     pub fn to_honest_input(&self) -> Result<HonestEventStudyInput, String> {
         let mut pre_periods = Vec::new();
         let mut post_periods = Vec::new();
@@ -199,6 +203,7 @@ impl EventTimeResult {
     ///
     /// # Errors
     /// Returns an error if the honest input construction or assessment fails.
+    #[cfg(feature = "honest")]
     #[expect(
         clippy::needless_pass_by_value,
         reason = "forward-compatible API accepts owned workflow config"

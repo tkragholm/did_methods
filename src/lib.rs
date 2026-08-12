@@ -26,8 +26,10 @@ pub use inference::{
     ClusterIndex, ClusterSpec, InferenceError, clustered_ci_from_index,
     clustered_standard_error_from_index, clustered_variance_from_index,
 };
+#[cfg(feature = "honest")]
+pub use methods::att_gt::WindowAssessment;
 pub use methods::att_gt::{
-    EventStudyResult, EventTimeResult, WindowAssessment, aggregate_att_gt_by_calendar_time,
+    EventStudyResult, EventTimeResult, aggregate_att_gt_by_calendar_time,
     aggregate_att_gt_by_cohort, aggregate_att_gt_event_time,
     aggregate_att_gt_event_time_with_influence, aggregate_att_gt_overall,
     att_gt_simultaneous_bands, att_gt_simultaneous_bands_with_influence, estimate_att_gt,
@@ -55,6 +57,7 @@ pub use inference::export::{
     InferenceCovarianceRow, InferenceInfluenceRow, build_clustered_inference_covariance_rows,
     build_inference_covariance_rows, build_inference_influence_rows,
 };
+#[cfg(feature = "honest")]
 pub use inference::sensitivity::{
     HonestAssessment, HonestConditionalConfidenceSet, HonestDirectionalFunctionalPoint,
     HonestDirectionalRegion, HonestDirectionalRegionDiagnostics, HonestDirectionalReport,
