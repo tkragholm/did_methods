@@ -14,3 +14,4 @@ pub mod improved;
 pub mod moments;
 pub mod panel;
 pub mod repeated;
+pub mod repeated_efficient;

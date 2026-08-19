@@ -31,6 +31,7 @@ pub use aggte::{
 pub use bands::{
     att_gt_mboot_bands, att_gt_simultaneous_bands, att_gt_simultaneous_bands_with_influence,
 };
+pub use pair_estimators::estimate_att_gt_dr_efficient_with_influence;
 pub use panel_pairs::{
     estimate_att_gt_dr_panel, estimate_att_gt_dr_panel_with_influence, unit_panel,
 };

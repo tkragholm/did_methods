@@ -52,12 +52,12 @@ pub fn estimate_drdid_repeated_cross_section(
     observations: &[DrDidRepeatedObservation],
     config: DrDidConfig,
 ) -> Result<DrDidEstimate, DrDidError> {
-    validate_drdid_config(config)?;
+    validate_config(config)?;
     if observations.is_empty() {
         return Err(DrDidError::EmptyInput);
     }
 
-    let prepared = prepare_repeated_data(observations)?;
+    let prepared = prepare(observations)?;
     let nuisance = fit_repeated_nuisance_models(&prepared, config)?;
     let moments = estimate_repeated_att_moments(
         &nuisance.normalized_weights,
@@ -89,16 +89,16 @@ pub fn estimate_drdid_repeated_cross_section(
     })
 }
 
-struct RepeatedPreparedData {
-    feature_count: usize,
-    treated_n: usize,
-    control_n: usize,
-    total_weight: f64,
-    treated_indicator: Vec<f64>,
-    post_indicator: Vec<f64>,
-    outcome: Vec<f64>,
-    sampling_weights: Vec<f64>,
-    design_matrix_flat: Vec<f64>,
+pub(super) struct RepeatedPreparedData {
+    pub(super) feature_count: usize,
+    pub(super) treated_n: usize,
+    pub(super) control_n: usize,
+    pub(super) total_weight: f64,
+    pub(super) treated_indicator: Vec<f64>,
+    pub(super) post_indicator: Vec<f64>,
+    pub(super) outcome: Vec<f64>,
+    pub(super) sampling_weights: Vec<f64>,
+    pub(super) design_matrix_flat: Vec<f64>,
 }
 
 struct RepeatedNuisanceFits {
@@ -107,7 +107,7 @@ struct RepeatedNuisanceFits {
     residualized_outcome: Vec<f64>,
 }
 
-fn prepare_repeated_data(
+pub(super) fn prepare(
     observations: &[DrDidRepeatedObservation],
 ) -> Result<RepeatedPreparedData, DrDidError> {
     let covariate_count = observations.first().map_or(0, |row| row.covariates.len());
@@ -219,7 +219,7 @@ fn fit_repeated_nuisance_models(
     config: DrDidConfig,
 ) -> Result<RepeatedNuisanceFits, DrDidError> {
     let observation_count = prepared.treated_indicator.len();
-    let normalized_weights = normalize_weights_to_n(&prepared.sampling_weights)?;
+    let normalized_weights = normalize_weights(&prepared.sampling_weights)?;
     let design_matrix = Mat::from_fn(observation_count, prepared.feature_count, |row, col| {
         prepared.design_matrix_flat[row * prepared.feature_count + col]
     });
@@ -364,7 +364,7 @@ fn fit_control_outcome_by_period(
     Ok(model.predict(design_matrix.as_ref(), control_coefficients.as_ref()))
 }
 
-fn validate_drdid_config(config: DrDidConfig) -> Result<(), DrDidError> {
+pub(super) fn validate_config(config: DrDidConfig) -> Result<(), DrDidError> {
     if !validate_confidence_level(config.confidence_level) {
         return Err(DrDidError::InvalidConfig(
             "confidence_level must be finite and in (0, 1)".to_string(),
@@ -401,7 +401,7 @@ fn validate_drdid_config(config: DrDidConfig) -> Result<(), DrDidError> {
     Ok(())
 }
 
-fn normalize_weights_to_n(weights: &[f64]) -> Result<Vec<f64>, DrDidError> {
+pub(super) fn normalize_weights(weights: &[f64]) -> Result<Vec<f64>, DrDidError> {
     normalize_weights_to_n_shared(weights)
         .map_err(|_| DrDidError::InvalidConfig("sum of weights must be > 0".to_string()))
 }

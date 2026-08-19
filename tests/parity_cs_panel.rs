@@ -1102,9 +1102,13 @@ fn rc_route_matches_the_traditional_estimator_and_aggregates() {
         );
         // Loose by the standards of the panel route's 1e-10. Our traditional RC
         // standard error tracks drdid_rc1 to within 9e-4 relative but is not
-        // identical to it. That gap is small, real and unexplained, so it is
-        // BOUNDED here rather than asserted away, and the worst case is printed
-        // below so a regression shows up as a number rather than as a pass.
+        // identical to it. The crate's 1e-8 ridge is NOT the cause: disabling it
+        // leaves the worst deviation at 8.5e-4 unchanged. Nor is it a general
+        // weakness of this crate's repeated-cross-section code, since
+        // `estimate_drdid_repeated_efficient` matches DRDID::drdid_rc to 1.5e-11
+        // on the point estimate and 3.4e-12 on the standard error. Something in
+        // the TRADITIONAL variant specifically is slightly off, and since `did`
+        // calls the locally efficient one, it is bounded here rather than chased.
         let relative = (ours.se - want.se_traditional).abs() / want.se_traditional;
         worst_se = worst_se.max(relative);
         assert!(
@@ -1201,4 +1205,72 @@ fn a_repeated_panel_row_is_refused() {
         matches!(err, did_methods::AttGtError::DuplicatePanelRow { .. }),
         "got {err:?}"
     );
+}
+
+/// The locally efficient RC route against `did`'s `panel = FALSE` output.
+///
+/// This is what `cs_rc_ref.json` was generated from, and it is the comparison
+/// the traditional route cannot pass: `did` calls `DRDID::drdid_rc`, and only
+/// this route does.
+#[test]
+fn efficient_rc_route_matches_did_panel_false() {
+    #[derive(Deserialize)]
+    struct RcRef {
+        att: Vec<f64>,
+        se: Vec<Option<f64>>,
+        dynamic: AggRef,
+    }
+
+    let did_rc: RcRef =
+        serde_json::from_str(&fs::read_to_string("tests/cs_rc_ref.json").expect("read rc"))
+            .expect("parse rc");
+    let base: CsPanelWithAgg = serde_json::from_str(
+        &fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel"),
+    )
+    .expect("parse panel");
+    let rows = observations(&base.data_subset);
+
+    // Ridge off, because R fits these regressions unregularised. The crate's
+    // 1e-8 default moves the influence function by about 2e-7 while cancelling
+    // in the point estimate, which is enough to matter at this tolerance and not
+    // enough to matter in use.
+    let mut config = universal_config(ComparisonGroup::NeverTreated);
+    config.drdid = DrDidConfig::builder().ridge(0.0).build();
+    let out = did_methods::estimate_att_gt_dr_efficient_with_influence(&rows, config)
+        .expect("efficient rc att(g,t)");
+
+    let expected = (0..did_rc.att.len())
+        .filter(|&i| did_rc.se[i].is_some())
+        .map(|i| (did_rc.att[i], did_rc.se[i].unwrap_or_default()))
+        .collect::<Vec<_>>();
+    assert_eq!(out.estimates.len(), expected.len());
+    for (ours, (att, se)) in out.estimates.iter().zip(&expected) {
+        assert!(
+            (ours.att - att).abs() < 1e-9,
+            "att({}, {}) {} vs did {att}",
+            ours.group,
+            ours.time,
+            ours.att
+        );
+        assert!(
+            (ours.se - se).abs() < 1e-9,
+            "se({}, {}) {} vs did {se}",
+            ours.group,
+            ours.time,
+            ours.se
+        );
+    }
+
+    // And the aggregation, which the traditional route could only match on point
+    // estimates because did had aggregated a different estimator's influence.
+    let panel = did_methods::row_panel(&rows);
+    let dynamic = run(
+        &out.estimates,
+        &out.influence_functions,
+        &panel,
+        did_methods::AggteType::Dynamic,
+        None,
+    );
+    check_overall("efficient rc dynamic", &dynamic, &did_rc.dynamic);
+    check_path("efficient rc dynamic", &dynamic, &did_rc.dynamic);
 }

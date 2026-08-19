@@ -105,7 +105,7 @@ region. `honest.py` now carries a `post_functionals` helper that bounds every
 horizon and every window using the study's own treated-count weights rather than
 equal ones.
 
-## The RC route is a different estimator from did's, which nothing recorded
+## The RC route: two estimators, and now both are here
 
 Found while giving the RC route its first reference of any kind.
 `did_attgt_dr_ref.json` had sat in `tests/` since before the panel route existed,
@@ -113,74 +113,42 @@ consumed by nothing, because it was generated with `att_gt`'s default
 `panel = TRUE` while the only Rust path was RC. It could never have passed.
 
 `did` calls `DRDID::drdid_rc` for `est_method = "dr"`, the LOCALLY EFFICIENT
-repeated-cross-section estimator. This crate implements the TRADITIONAL one,
-`DRDID::drdid_rc1`. On mpdta:
+repeated-cross-section estimator, which fits four outcome regressions (treated
+and control, in each period) rather than the control group's two. The crate had
+only the TRADITIONAL `DRDID::drdid_rc1`. Point estimates agree; standard errors
+differ by about 2.8%, 0.0922804 against 0.0897358 for cell (2004, 2004).
 
-* the point estimates agree to 1e-9;
-* the standard errors differ by about 2.8%, 0.0922804 against 0.0897358 for cell
-  (2004, 2004);
-* and ours tracks `drdid_rc1` to 8.5e-4 relative, close but not exact, which is
-  bounded by a test and printed rather than asserted away.
+`estimate_drdid_repeated_efficient` is the missing one, and
+`estimate_att_gt_dr_efficient_with_influence` routes `ATT(g,t)` through it. The
+RC route now reproduces `did`'s `panel = FALSE` output outright: ATT and standard
+errors to 1e-9, and the dynamic aggregation with it.
 
-So there is no locally efficient RC estimator in the crate. Adding one would be
-the way to make the RC route agree with `did` outright.
+Three details in the reference are easy to miss and each moves the answer:
+sampling weights are normalised to mean one before anything else, so every mean
+is over the full sample; trimming is asymmetric, keeping treated rows whatever
+their propensity score; and the residual inside each regression's asymptotic
+linear representation uses that regression's own fitted values rather than the
+period-combined control prediction used in the `eta` terms.
+
+**The crate's 1e-8 ridge has to be off for exact parity**, because R fits these
+regressions unregularised. It cancels in the point estimate and does not cancel
+in the influence function: with the default the worst influence deviation is
+2.0e-7, without it 1.5e-8, and the ATT and standard error come to 1.5e-11 and
+3.4e-12. The ridge is worth keeping as a default for collinear covariates; it is
+just not what R does.
+
+**One gap stays open, and it is in the traditional estimator, not this one.**
+`estimate_drdid_repeated_cross_section` tracks `drdid_rc1` to 8.5e-4 relative on
+the standard error rather than exactly. The ridge is NOT the cause: disabling it
+leaves the worst deviation unchanged. Since the locally efficient implementation
+matches its own reference to 1e-11, this is something specific to the
+traditional variant. It is bounded by a test rather than chased, because `did`
+calls the other one.
 
 Separately, and worth knowing for Study 1: the RC route's standard errors on
 mpdta are roughly **four times** the panel route's for identical point estimates.
 That is the cost of treating one unit observed twice as two observations, and it
 is the direction `estimator_choice.md` predicted without a number.
-
-## Done in the second pass
-
-`aggregate_att_gt` in `src/methods/att_gt/aggte.rs`, matching `did::aggte` for
-all four types plus `balance_e`. Five more parity tests, all to 1e-9 on both the
-point estimates and the standard errors.
-
-Three more findings, each recorded where the code is:
-
-4. **The weights are estimated and that changes the standard error.** Three of
-   the four summaries weight by cohort share `pg`, computed from the same sample.
-   Treating it as fixed gives 0.0114607 at event time 0 where the right answer is
-   0.0114942. `weight_influence` is the correction, ported from `did:::wif`.
-
-5. **`aggregate_att_gt_event_time_with_influence` computed
-   `sum(w^2 * se^2)`**, the variance of a weighted sum of independent terms, on
-   cells that share units. It was carrying the influence vectors alongside and
-   not using them. Now computed from the combined influence function. Nothing in
-   the suite caught this, so a regression test now pins it.
-
-6. **`did` does not use Mammen weights, whatever the documentation says.**
-   `BMisc::multiplier_bootstrap` is the C++ kernel it calls; probed with a 1x1
-   influence matrix over 200,000 draws it returns exactly `-1` and `1` at 0.4994
-   and 0.5006. Implementing the documented Mammen weights puts the simultaneous
-   critical value at 2.72 against `did`'s 2.62, twenty Monte Carlo standard
-   deviations out. `att_gt_mboot_bands` uses Rademacher, the IQR scale and
-   type-1 quantiles, and lands at 2.62.
-
-Also fixed while there: the RC route's influence vectors were zero-padded without
-rescaling, the same defect found in the panel route, which mattered as soon as
-anything recomputed a standard error from them.
-
-## Clustered per-cell standard errors
-
-Closed the same day, and the earlier note that "`did` has the same split" was
-wrong. `did` reports a clustered per-cell standard error under **both** bootstrap
-settings: with `bstrap = TRUE` it comes from `mboot`, and with `bstrap = FALSE`
-it is analytic. There was a reference all along.
-
-`att_gt_clustered_standard_errors` is that analytic version,
-`sqrt(sum_c s_c^2) / n` with `s_c` a cluster's summed influence and no
-`G / (G - 1)` correction. Matches `did` 2.5.1 to 1e-10.
-
-Two things worth carrying forward:
-
-* **It moves standard errors in both directions.** On mpdta clustered into
-  states, the first cell falls from 0.0221 to 0.0102 and another rises from
-  0.0312 to 0.0489. "Clustering inflates standard errors" is a rule of thumb, not
-  a fact, and there is no safe direction to round in.
-* **Singleton clusters return the pair estimator's own number** to 1e-12, so the
-  function can be applied unconditionally. On a design without clustering it is a
-  no-op rather than a small unexplained shift.
 
 ## Two design questions, decided 19 August 2026
 

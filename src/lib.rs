@@ -35,9 +35,10 @@ pub use methods::att_gt::{
     aggregate_att_gt_event_time_with_influence, aggregate_att_gt_overall,
     att_gt_clustered_standard_errors, att_gt_mboot_bands, att_gt_simultaneous_bands,
     att_gt_simultaneous_bands_with_influence, estimate_att_gt, estimate_att_gt_dr,
-    estimate_att_gt_dr_panel, estimate_att_gt_dr_panel_with_influence,
-    estimate_att_gt_dr_with_influence, estimate_att_gt_ipw, estimate_att_gt_ipw_with_influence,
-    estimate_att_gt_or, estimate_att_gt_or_with_influence, row_panel, unit_panel,
+    estimate_att_gt_dr_efficient_with_influence, estimate_att_gt_dr_panel,
+    estimate_att_gt_dr_panel_with_influence, estimate_att_gt_dr_with_influence,
+    estimate_att_gt_ipw, estimate_att_gt_ipw_with_influence, estimate_att_gt_or,
+    estimate_att_gt_or_with_influence, row_panel, unit_panel,
 };
 pub use methods::continuous::sieve::estimate_acrt_sieve;
 pub use methods::did_cc::{
@@ -48,6 +49,7 @@ pub use methods::did_cc::{
 pub use methods::drdid::improved::{
     estimate_drdid_improved_panel, estimate_drdid_improved_repeated_cross_section,
 };
+pub use methods::drdid::repeated_efficient::estimate_drdid_repeated_efficient;
 pub use methods::efficient::{
     aggregate_efficient_att_gt_by_calendar_time, aggregate_efficient_att_gt_by_cohort,
     aggregate_efficient_att_gt_event_time, aggregate_efficient_att_gt_event_time_with_influence,

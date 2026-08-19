@@ -83,6 +83,51 @@ pub fn estimate_att_gt_dr(
     )
 }
 
+/// `ATT(g,t)` through the LOCALLY EFFICIENT repeated-cross-section estimator.
+///
+/// [`estimate_att_gt_dr_with_influence`] uses the traditional one,
+/// `DRDID::drdid_rc1`. `did::att_gt(est_method = "dr", panel = FALSE)` uses this
+/// one, `DRDID::drdid_rc`, so this is the route to take when the numbers have to
+/// match `did` on repeated cross sections.
+///
+/// The two agree on the point estimate and disagree on the standard error, by
+/// about 2.8% on `mpdta`.
+///
+/// # Errors
+/// As [`estimate_att_gt_dr_with_influence`].
+pub fn estimate_att_gt_dr_efficient_with_influence(
+    observations: &[AttGtDrObservation],
+    config: AttGtDrConfig,
+) -> Result<AttGtInfluenceOutput, AttGtError> {
+    estimate_att_gt_pair_with_influence(
+        observations,
+        config,
+        "dr_efficient",
+        |pair_rows, group, time, method_cfg| {
+            let dr = crate::methods::drdid::repeated_efficient::estimate_drdid_repeated_efficient(
+                pair_rows,
+                method_cfg.drdid,
+            )
+            .map_err(|_| ())?;
+            Ok(PairEstimateWithInfluence {
+                estimate: AttGtEstimate {
+                    group,
+                    time,
+                    event_time: time - group,
+                    att: dr.att,
+                    se: dr.se,
+                    ci_low: dr.ci_low,
+                    ci_high: dr.ci_high,
+                    treated_n: dr.treated_n,
+                    control_n: dr.control_n,
+                    total_weight: dr.total_weight,
+                },
+                influence_function: dr.influence_function,
+            })
+        },
+    )
+}
+
 pub fn estimate_att_gt_or_with_influence(
     observations: &[AttGtDrObservation],
     config: AttGtDrConfig,
