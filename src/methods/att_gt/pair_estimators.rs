@@ -179,9 +179,18 @@ where
                 });
             }
 
+            // Rescale from the cell's own sample to the full one, for the same
+            // reason as `panel_pairs::estimate_panel_cell`: psi is normalised so
+            // that sqrt(sum(psi^2)) / n_cell is the cell's standard error, and
+            // padding to full_n without rescaling shrinks each cell by a
+            // different factor. Any consumer that recomputes a standard error
+            // from these vectors, which is what a correlation-aware aggregation
+            // must do, would otherwise get a number that depends on how large the
+            // cell happened to be.
+            let scale = usize_to_f64(full_n) / usize_to_f64(pair_rows.len());
             let mut aligned = vec![0.0; full_n];
             for (local_idx, global_idx) in pair_indices.iter().enumerate() {
-                aligned[*global_idx] = pair.influence_function[local_idx];
+                aligned[*global_idx] = pair.influence_function[local_idx] * scale;
             }
             estimates.push(pair.estimate);
             influence_functions.push(aligned);
@@ -310,7 +319,7 @@ pub fn prepare_att_gt_dr_inputs(
     ))
 }
 
-const fn baseline_time_for_pair(
+pub(super) const fn baseline_time_for_pair(
     time: i32,
     group: i32,
     universal_baseline_time: i32,
@@ -385,7 +394,12 @@ pub fn build_pair_rows_into(
             })
         } else if super::is_control_for_pair(
             row.first_treated_time,
-            time,
+            // The LATER of the two periods being compared, not `time`. Under a
+            // universal base period a pre-treatment cell has baseline > time, and
+            // a unit treated in between is already treated when the baseline is
+            // read. See the note in `panel_pairs::collect_cell_units` for the
+            // measured difference against did 2.5.1.
+            time.max(baseline_time),
             config.comparison_group,
             config.anticipation_periods,
         ) {

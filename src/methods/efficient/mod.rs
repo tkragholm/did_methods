@@ -1122,6 +1122,9 @@ mod tests {
                 let x = if replicate % 2 == 0 { 0.0 } else { 1.0 };
                 let control_outcome = x + f64::from(time);
                 rows.push(AttGtDrObservation {
+                    // Each replicate is a unit followed across all four periods;
+                    // controls and treated are numbered in disjoint ranges.
+                    unit_id: Some(i64::from(replicate)),
                     first_treated_time: None,
                     time,
                     outcome: control_outcome,
@@ -1131,6 +1134,7 @@ mod tests {
 
                 let treated_outcome = control_outcome + if time >= 3 { 2.0 } else { 0.0 };
                 rows.push(AttGtDrObservation {
+                    unit_id: Some(i64::from(replicate) + 1_000),
                     first_treated_time: Some(3),
                     time,
                     outcome: treated_outcome,

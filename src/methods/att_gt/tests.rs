@@ -405,10 +405,22 @@ fn estimates_dr_group_time_att_with_not_yet_treated_controls() {
         .iter()
         .map(|est| ((est.group, est.time), est.att))
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(att_map.len(), 6);
+    // Four cells, not six. Every unit here is eventually treated (groups 2, 3
+    // and 4; there is no never-treated arm), and a not-yet-treated control must
+    // be untreated at the LATER of the two periods a cell compares. That empties
+    // the cells whose later period is 4, since no group has G > 4:
+    //   (2,4) base 1 -> needs G > 4   gone
+    //   (3,4) base 2 -> needs G > 4   gone
+    // and all of group 4's own cells, whose base is 3, need G > 3 with only
+    // group 4 itself above it. What survives is (2,2), (2,3), (3,1), (3,3).
+    // Six was the count under the older rule that judged eligibility at `time`
+    // alone, which admitted units already treated by the baseline period.
+    assert_eq!(att_map.len(), 4);
     assert!((att_map[&(2, 2)] - 2.0).abs() < 0.2);
     assert!((att_map[&(2, 3)] - 2.0).abs() < 0.2);
     assert!((att_map[&(3, 3)] - 1.0).abs() < 0.2);
+    // The surviving pre-treatment placebo, which must be flat.
+    assert!(att_map[&(3, 1)].abs() < 0.2);
 }
 
 #[test]

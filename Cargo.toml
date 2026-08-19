@@ -70,3 +70,8 @@ path = "tests/dataset_validation.rs"
 name = "parity"
 path = "tests/parity.rs"
 required-features = ["parity-tests"]
+
+[[test]]
+name = "parity_cs_panel"
+path = "tests/parity_cs_panel.rs"
+required-features = ["parity-tests"]

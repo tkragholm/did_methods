@@ -29,12 +29,15 @@ pub use inference::{
 #[cfg(feature = "honest")]
 pub use methods::att_gt::WindowAssessment;
 pub use methods::att_gt::{
-    EventStudyResult, EventTimeResult, aggregate_att_gt_by_calendar_time,
+    AggteConfig, AggteError, AggteEstimate, AggteResult, AggteType, EventStudyResult,
+    EventTimeResult, UnitPanel, aggregate_att_gt, aggregate_att_gt_by_calendar_time,
     aggregate_att_gt_by_cohort, aggregate_att_gt_event_time,
     aggregate_att_gt_event_time_with_influence, aggregate_att_gt_overall,
-    att_gt_simultaneous_bands, att_gt_simultaneous_bands_with_influence, estimate_att_gt,
-    estimate_att_gt_dr, estimate_att_gt_dr_with_influence, estimate_att_gt_ipw,
-    estimate_att_gt_ipw_with_influence, estimate_att_gt_or, estimate_att_gt_or_with_influence,
+    att_gt_clustered_standard_errors, att_gt_mboot_bands, att_gt_simultaneous_bands,
+    att_gt_simultaneous_bands_with_influence, estimate_att_gt, estimate_att_gt_dr,
+    estimate_att_gt_dr_panel, estimate_att_gt_dr_panel_with_influence,
+    estimate_att_gt_dr_with_influence, estimate_att_gt_ipw, estimate_att_gt_ipw_with_influence,
+    estimate_att_gt_or, estimate_att_gt_or_with_influence, row_panel, unit_panel,
 };
 pub use methods::continuous::sieve::estimate_acrt_sieve;
 pub use methods::did_cc::{

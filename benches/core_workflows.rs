@@ -81,6 +81,7 @@ fn build_att_gt_rows(num_units: usize, start_year: i32, periods: usize) -> Vec<A
             };
             let trend = f64::from(time - start_year) * 0.05;
             observations.push(AttGtDrObservation {
+                unit_id: i64::try_from(unit_index).ok(),
                 first_treated_time,
                 time,
                 outcome: baseline + trend + treated_effect,

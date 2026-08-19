@@ -14,15 +14,26 @@ use crate::types::{
 };
 
 mod aggregation;
+pub mod aggte;
 mod bands;
 mod core;
 pub mod pair_estimators;
+pub mod panel_pairs;
 
 pub use aggregation::{
     aggregate_att_gt_by_calendar_time, aggregate_att_gt_by_cohort, aggregate_att_gt_event_time,
     aggregate_att_gt_event_time_with_influence, aggregate_att_gt_overall,
 };
-pub use bands::{att_gt_simultaneous_bands, att_gt_simultaneous_bands_with_influence};
+pub use aggte::{
+    AggteConfig, AggteError, AggteEstimate, AggteResult, AggteType, UnitPanel, aggregate_att_gt,
+    att_gt_clustered_standard_errors, row_panel,
+};
+pub use bands::{
+    att_gt_mboot_bands, att_gt_simultaneous_bands, att_gt_simultaneous_bands_with_influence,
+};
+pub use panel_pairs::{
+    estimate_att_gt_dr_panel, estimate_att_gt_dr_panel_with_influence, unit_panel,
+};
 
 /// Consolidated result of an event-study estimation.
 #[derive(Debug, Clone, PartialEq)]

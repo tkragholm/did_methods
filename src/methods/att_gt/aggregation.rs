@@ -70,21 +70,24 @@ pub fn aggregate_att_gt_event_time_with_influence(
             .map(|idx| raw_weight(&estimates[*idx], config.weighting))
             .sum::<f64>();
         let mut estimate = 0.0;
-        let mut variance = 0.0;
         let mut total_influence = vec![0.0; n];
         let mut total_weight = 0.0;
         for idx in bucket {
             let component = &estimates[idx];
             let normalized_weight = raw_weight(component, config.weighting) / raw_total;
             estimate = normalized_weight.mul_add(component.att, estimate);
-            variance = (normalized_weight * normalized_weight * component.se)
-                .mul_add(component.se, variance);
             total_weight += component.total_weight;
             for (dst, src) in total_influence.iter_mut().zip(&influence_functions[idx]) {
                 *dst = normalized_weight.mul_add(*src, *dst);
             }
         }
-        let se = variance.sqrt();
+        // From the COMBINED influence function, not from `sum(w^2 * se^2)`.
+        // The latter is the variance of a weighted sum of INDEPENDENT terms, and
+        // ATT(g,t) cells share units, so its off-diagonal terms are not zero. It
+        // understated the standard error whenever the components were positively
+        // correlated, which is the ordinary case. The influence vectors were
+        // being carried alongside for exactly this and were not being used.
+        let se = crate::inference::standard_error_from_influence(&total_influence);
         let margin = z * se;
         aggregated_estimates.push(AttGtEventTimeEstimate {
             event_time,

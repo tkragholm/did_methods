@@ -477,11 +477,26 @@ impl ValidatedInferenceDataset {
         ) -> Result<crate::types::AttGtInfluenceOutput, crate::types::AttGtError>,
     {
         let ds = &self.inner;
+        // Unit ids arrive as strings. The panel route needs a stable integer per
+        // unit, so distinct ids are numbered in sorted order. Sorted rather than
+        // first-seen so that the numbering does not depend on row order, which
+        // would make an influence vector depend on how the frame was assembled.
+        let unit_codes: std::collections::BTreeMap<&str, i64> = {
+            let mut distinct: Vec<&str> = ds.unit_ids.iter().map(String::as_str).collect();
+            distinct.sort_unstable();
+            distinct.dedup();
+            distinct
+                .into_iter()
+                .enumerate()
+                .map(|(position, id)| (id, crate::util::usize_to_i64(position)))
+                .collect()
+        };
         let observations: Vec<crate::types::AttGtDrObservation> = ds
             .unit_ids
             .iter()
             .enumerate()
-            .map(|(i, _)| crate::types::AttGtDrObservation {
+            .map(|(i, id)| crate::types::AttGtDrObservation {
+                unit_id: unit_codes.get(id.as_str()).copied(),
                 first_treated_time: ds.first_treated_times[i],
                 time: ds.time_periods[i],
                 outcome: ds.outcomes[i],

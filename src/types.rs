@@ -654,6 +654,11 @@ pub enum AttGtError {
     InconsistentCovariateCount { expected: usize, actual: usize },
     #[error("never-treated comparison group is required but missing")]
     MissingNeverTreatedGroup,
+    #[error(
+        "panel ATT(g,t) requires a unit_id on every row: a unit cannot be \
+         differenced across periods unless it can be named"
+    )]
+    MissingUnitId,
     #[error("no estimable ATT(g,t) pairs found")]
     NoEstimablePairs,
     #[error(
@@ -686,6 +691,11 @@ pub enum AttGtError {
 /// One row for DR staggered-adoption `ATT(g,t)` estimation with covariates.
 #[derive(bon::Builder, Debug, Clone, PartialEq)]
 pub struct AttGtDrObservation {
+    /// Panel identifier. Required by the panel route
+    /// ([`estimate_att_gt_dr_panel`](crate::estimate_att_gt_dr_panel)), which
+    /// differences a unit against itself; ignored by the repeated-cross-section
+    /// route, where one row is one observation.
+    pub unit_id: Option<i64>,
     pub first_treated_time: Option<i32>,
     pub time: i32,
     pub outcome: f64,
@@ -699,6 +709,25 @@ impl AttGtDrObservation {
     #[must_use]
     pub const fn new(first_treated_time: Option<i32>, time: i32, outcome: f64) -> Self {
         Self {
+            unit_id: None,
+            first_treated_time,
+            time,
+            outcome,
+            weight: 1.0,
+            covariates: Vec::new(),
+        }
+    }
+
+    /// The same row carrying its panel identifier.
+    #[must_use]
+    pub const fn with_unit_id(
+        unit_id: i64,
+        first_treated_time: Option<i32>,
+        time: i32,
+        outcome: f64,
+    ) -> Self {
+        Self {
+            unit_id: Some(unit_id),
             first_treated_time,
             time,
             outcome,
