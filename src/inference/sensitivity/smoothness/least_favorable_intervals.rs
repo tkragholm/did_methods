@@ -173,6 +173,41 @@ fn build_variance_soc_terms(
     Ok((transform, d))
 }
 
+/// Split the variance rows into the ones `w` can move and the norm it cannot.
+///
+/// `transform` has one row per period but only `num_pre` columns, and its
+/// entries come from a lower-triangular Cholesky factor, so every row at or
+/// after the first post period is **identically zero**: that part of the
+/// estimator's variance belongs to the post-period coefficients and no choice of
+/// pre-period weights touches it. Its `d` entries are still real numbers, so in
+/// the cone they appear as all-zero rows with non-zero right-hand sides.
+///
+/// Those rows are what made Clarabel stall with `InsufficientProgress`. They fix
+/// a floor under the norm -- on the case that failed, 0.2828 of an available
+/// 0.2898 -- so the cone is a sliver 0.06 wide whose analytic centre sits almost
+/// on the boundary, and an interior-point method has nowhere to move. The
+/// problem is feasible and well-posed; it is the FORM that is degenerate.
+///
+/// Returned separately, the caller can put the constant where it belongs: as one
+/// scalar rather than as a block of structurally rank-deficient rows.
+fn split_constant_variance(
+    transform: Vec<Vec<f64>>,
+    d: Vec<f64>,
+) -> (Vec<Vec<f64>>, Vec<f64>, f64) {
+    let mut active_rows = Vec::with_capacity(transform.len());
+    let mut active_d = Vec::with_capacity(d.len());
+    let mut constant_sq = 0.0;
+    for (row, value) in transform.into_iter().zip(d) {
+        if row.iter().any(|coefficient| *coefficient != 0.0) {
+            active_rows.push(row);
+            active_d.push(value);
+        } else {
+            constant_sq += value * value;
+        }
+    }
+    (active_rows, active_d, constant_sq.max(0.0).sqrt())
+}
+
 fn variance_for_w(input: &HonestEventStudyInput, post_weights: &[f64], w: &[f64]) -> f64 {
     let estimator = full_estimator_vec(input.num_pre_periods(), post_weights, w);
     estimator
@@ -244,6 +279,12 @@ fn find_lowest_h(
     let num_pre = input.num_pre_periods();
     let weighted_sum = weighted_post_sum(post_weights);
     let (transform, d) = build_variance_soc_terms(input, post_weights)?;
+    // `h` is a variable here, so the immovable part cannot be folded into the
+    // bound the way it is in `find_worst_case_bias_given_h`. It can still be
+    // carried as ONE row holding its norm instead of a block of zero rows
+    // holding its components: same cone, same optimum, one rank-deficient row
+    // rather than several.
+    let (transform, d, constant) = split_constant_variance(transform, d);
     let num_vars = num_pre + 1;
     let objective = {
         let mut out = vec![0.0; num_vars];
@@ -258,7 +299,7 @@ fn find_lowest_h(
         row
     }];
     let soc_rows = {
-        let mut rows = Vec::with_capacity(d.len() + 1);
+        let mut rows = Vec::with_capacity(d.len() + 2);
         let mut first = vec![0.0; num_vars];
         first[num_pre] = -1.0;
         rows.push(first);
@@ -267,11 +308,13 @@ fn find_lowest_h(
             row[..num_pre].copy_from_slice(&coeffs);
             row
         }));
+        rows.push(vec![0.0; num_vars]);
         rows
     };
     let mut rhs = vec![weighted_sum];
     rhs.push(0.0);
     rhs.extend(d);
+    rhs.push(constant);
     let Some(solution) = solve_socp(&objective, &[], &equalities, &soc_rows, &rhs)? else {
         return Ok(None);
     };
@@ -298,6 +341,28 @@ fn find_worst_case_bias_given_h(
     let constant = bias_objective_constant(post_weights);
     let lower_tri = lower_triangular_ones(num_pre);
     let (transform, d) = build_variance_soc_terms(input, post_weights)?;
+    // `h` is FIXED here, so the immovable variance folds into the bound:
+    // ||d - Tw|| <= h with a constant block c is exactly
+    // ||d_active - T_active w|| <= sqrt(h^2 - c^2), and if h < c there is no w
+    // at all. Solving it in that form is what stops Clarabel stalling: the cone
+    // that failed was 0.2898 wide with 0.2828 of it already spent on rows no
+    // variable appears in, and the same problem restated is 0.0637 wide with
+    // nothing fixed inside it.
+    // NOT `constant`: that name is already taken in this function by
+    // `bias_objective_constant`, and shadowing it here would have silently
+    // changed the returned bias rather than the cone.
+    let (transform, d, immovable) = split_constant_variance(transform, d);
+    let radius_sq = h.mul_add(h, -(immovable * immovable));
+    if radius_sq < 0.0 {
+        if std::env::var("SOCP_DEBUG").is_ok() {
+            eprintln!("INFEASIBLE h={h} immovable={immovable}");
+        }
+        // Infeasible rather than unsolvable: no weighting achieves a standard
+        // deviation below the part of it that does not depend on the weights.
+        // The caller's `None` arm already means exactly this.
+        return Ok(None);
+    }
+    let radius = radius_sq.sqrt();
     let num_vars = num_pre * 2;
     let objective = {
         let mut out = vec![0.0; num_vars];
@@ -340,7 +405,7 @@ fn find_worst_case_bias_given_h(
     };
     let mut rhs = vec![0.0; inequalities.len()];
     rhs.push(weighted_sum);
-    rhs.push(h);
+    rhs.push(radius);
     rhs.extend(d);
     let Some(solution) = solve_socp(&objective, &inequalities, &equalities, &soc_rows, &rhs)?
     else {

@@ -13,9 +13,7 @@ use super::super::super::{
     HonestOptimizationSurfaceConfig, HonestSensitivity, RelativeMagnitudeConfidenceSetConfig,
 };
 use super::directional_region::{
-    assess_honest_event_study_directional_region_with_config,
-    assess_honest_event_study_directional_region_with_precalibrated_pointwise,
-    calibrate_directional_region,
+    assess_honest_event_study_directional_region_with_config, calibrate_directional_region,
 };
 use crate::types::InferenceConfig;
 
@@ -376,21 +374,11 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive_with_confi
 
     let total_random = config.surface.random_unit_directions;
     let mut previous_pointwise: Option<f64> = None;
-    let mut previous_critical: Option<f64> = None;
     let mut random_count = config.adaptive.random_batch_size.min(total_random);
     let mut iterations = 0usize;
-    let mut latest_directions: Option<Vec<Vec<f64>>> = None;
-    let mut latest_random_count = random_count;
-    let mut latest_pointwise: Option<f64> = None;
-    let mut latest_critical: Option<f64> = None;
     let mut did_converge = false;
+    let mut chosen_random_draw = random_count;
     let mut warm_starts_by_rank: Option<Vec<Vec<f64>>> = None;
-    let owned_relative_magnitude = match sensitivity {
-        HonestSensitivity::RelativeMagnitude(mbar) => Some(
-            super::super::prepare_relative_magnitude_base_context(input, mbar)?,
-        ),
-        HonestSensitivity::Smoothness(_) => None,
-    };
 
     while iterations < config.adaptive.max_iterations {
         let mut cfg = config.surface;
@@ -427,7 +415,12 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive_with_confi
             refine_started.elapsed().as_millis(),
         );
         let calibrate_started = Instant::now();
-        let (current_pointwise, current_critical) =
+        // Only the pointwise level is read here: it is what the convergence
+        // test compares. The critical value used to be carried out of the loop
+        // as well, and is not any more -- the region is recomputed at the chosen
+        // count once the loop has decided, so this calibration exists purely to
+        // answer "draw more?".
+        let (current_pointwise, _) =
             calibrate_directional_region(input, &directions, inference, config.joint)?;
         emit_optimization_surface_timing(
             "calibrate",
@@ -441,60 +434,76 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive_with_confi
             (current_pointwise - previous).abs() <= config.adaptive.pointwise_tolerance
                 && random_direction_count >= config.adaptive.min_random_for_convergence
         });
-        latest_directions = Some(directions);
-        latest_random_count = random_direction_count;
-        latest_pointwise = Some(current_pointwise);
-        latest_critical = Some(current_critical);
         if converged_this_iter || random_count >= total_random {
             did_converge = converged_this_iter;
+            chosen_random_draw = random_count;
             break;
         }
         previous_pointwise = Some(current_pointwise);
-        previous_critical = Some(current_critical);
         random_count = (random_count + config.adaptive.random_batch_size).min(total_random);
         iterations += 1;
     }
 
-    let directions = latest_directions
-        .ok_or_else(|| "adaptive optimization surface produced no region".to_string())?;
-    let pointwise_confidence_level = latest_pointwise
-        .or(previous_pointwise)
-        .ok_or_else(|| "adaptive optimization surface produced no calibration".to_string())?;
-    let calibrated_max_t_critical_value = latest_critical
-        .or(previous_critical)
-        .ok_or_else(|| "adaptive optimization surface produced no critical value".to_string())?;
-    let final_assess_started = Instant::now();
-    let mut region = assess_honest_event_study_directional_region_with_precalibrated_pointwise(
+    // THE ANSWER IS COMPUTED BY THE FULL-GRID PATH, at the number of random
+    // directions this loop chose.
+    //
+    // The loop warm-starts each iteration's refinement from the previous one's
+    // solutions. That is a real speedup and the right thing to do while deciding
+    // whether to draw more directions; it must not decide the REGION. Refinement
+    // is an iterative optimisation, so a warm start lands somewhere slightly
+    // different from a cold one, `deduplicate_unit_directions` then merges a
+    // near-coincident pair in one path and not the other, and the region comes
+    // back with a different number of directions depending on how many batches
+    // it took to arrive.
+    //
+    // Measured on the parity fixture, forced to the same 40 random directions:
+    // warm-started, 45 directions and a pointwise level of 0.998888888888889;
+    // full grid, 46 and 0.9989130434782608. The gap is immaterial and the
+    // principle is not -- a confidence region has to be a function of the data
+    // rather than of the search path that found it, and this repository has
+    // fixed the same class of defect twice before, in the matched cohort's row
+    // order and in the diagnosis-group tie-break.
+    //
+    // Re-refining the loop's OWN directions cold is not enough and was tried:
+    // they have already been moved by the warm passes, so cold-refining them
+    // starts somewhere the full path never stands. What restores the contract is
+    // computing the final region the way the full path computes it.
+    //
+    // The saving the adaptive path exists for survives: it stops at the count it
+    // chose rather than at `total_random`, which is the expensive number. What it
+    // costs is one extra evaluation at that chosen count.
+    let mut cfg = config.surface;
+    cfg.random_unit_directions = chosen_random_draw;
+    let final_started = Instant::now();
+    let mut region = assess_honest_event_study_optimization_surface_region_with_config(
         input,
-        &directions,
         sensitivity,
+        inference,
         null_value,
         config.relative_magnitude,
-        owned_relative_magnitude.as_ref(),
-        config.joint.method,
-        inference.confidence_level,
-        pointwise_confidence_level,
-        calibrated_max_t_critical_value,
+        config.joint,
+        cfg,
     )?;
+    let settled_random_count = region.diagnostics.random_direction_count;
     emit_optimization_surface_timing(
         "final_directional_assessment",
         sensitivity,
-        directions.len(),
-        latest_random_count,
+        region.points.len(),
+        settled_random_count,
         iterations + 1,
-        final_assess_started.elapsed().as_millis(),
+        final_started.elapsed().as_millis(),
     );
     region.diagnostics = HonestDirectionalRegionDiagnostics::adaptive(
         region.points.len(),
-        latest_random_count,
+        settled_random_count,
         iterations + 1,
         did_converge,
     );
     emit_optimization_surface_timing(
         "total",
         sensitivity,
-        directions.len(),
-        latest_random_count,
+        region.points.len(),
+        settled_random_count,
         iterations + 1,
         total_started.elapsed().as_millis(),
     );
