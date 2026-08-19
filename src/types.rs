@@ -659,6 +659,12 @@ pub enum AttGtError {
          differenced across periods unless it can be named"
     )]
     MissingUnitId,
+    #[error(
+        "unit {unit_id} has more than one row for a period in cell (group {group}, time \
+         {time}); a panel unit is observed once per period, and repeating rows to express \
+         a frequency weight silently collapses to one unit. Use the weight field."
+    )]
+    DuplicatePanelRow { unit_id: i64, group: i32, time: i32 },
     #[error("no estimable ATT(g,t) pairs found")]
     NoEstimablePairs,
     #[error(

@@ -87,8 +87,9 @@ fn collect_cell_units(
     time: i32,
     baseline_time: i32,
     config: AttGtDrConfig,
-) -> Vec<PanelUnit> {
+) -> Result<Vec<PanelUnit>, AttGtError> {
     let mut by_unit: BTreeMap<i64, PanelUnit> = BTreeMap::new();
+    let mut duplicate: Option<i64> = None;
 
     for row in observations {
         if row.time != baseline_time && row.time != time {
@@ -128,19 +129,39 @@ fn collect_cell_units(
         });
 
         // `baseline_time == time` cannot reach here: the caller skips that cell.
+        //
+        // A second row for the same unit at the same period is a duplicate, and
+        // it is reported rather than absorbed. Last-write-wins would silently
+        // change the estimate: a caller expressing "this unit counts four times"
+        // by repeating its rows gets one unit and no error, and the weight they
+        // thought they had applied simply vanishes. Use `weight` for that.
+        let slot = if row.time == baseline_time {
+            &mut entry.baseline_outcome
+        } else {
+            &mut entry.follow_up_outcome
+        };
+        if slot.is_some() {
+            duplicate = Some(id);
+        }
+        *slot = Some(row.outcome);
         if row.time == baseline_time {
-            entry.baseline_outcome = Some(row.outcome);
             entry.weight = row.weight;
             entry.covariates.clone_from(&row.covariates);
-        } else {
-            entry.follow_up_outcome = Some(row.outcome);
         }
     }
 
-    by_unit
+    if let Some(unit_id) = duplicate {
+        return Err(AttGtError::DuplicatePanelRow {
+            unit_id,
+            group,
+            time,
+        });
+    }
+
+    Ok(by_unit
         .into_values()
         .filter(|unit| unit.baseline_outcome.is_some() && unit.follow_up_outcome.is_some())
-        .collect()
+        .collect())
 }
 
 /// Estimate one `(g, t)` cell and return the estimate plus a unit-aligned
@@ -262,7 +283,7 @@ pub fn estimate_att_gt_dr_panel_with_influence(
             }
 
             let units =
-                collect_cell_units(observations, &positions, group, time, baseline_time, config);
+                collect_cell_units(observations, &positions, group, time, baseline_time, config)?;
 
             match estimate_panel_cell(&units, unit_count, group, time, config) {
                 Ok((estimate, influence)) => {

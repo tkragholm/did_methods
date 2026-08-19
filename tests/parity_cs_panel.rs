@@ -1177,3 +1177,28 @@ fn rc_route_matches_the_traditional_estimator_and_aggregates() {
         );
     }
 }
+
+/// A repeated panel row is an error, not a frequency weight.
+///
+/// Expressing "this unit counts four times" by repeating its rows works on the
+/// repeated-cross-section route, where a row is an observation. On the panel
+/// route the copies collapse into one unit and the intended weight silently
+/// vanishes. That is a wrong answer with no symptom, so it is refused.
+#[test]
+fn a_repeated_panel_row_is_refused() {
+    let raw =
+        fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel fixture");
+    let fixture: CsPanelWithAgg = serde_json::from_str(&raw).expect("parse panel fixture");
+    let mut rows = observations(&fixture.data_subset);
+    rows.push(rows[0].clone());
+
+    let err = estimate_att_gt_dr_panel_with_influence(
+        &rows,
+        universal_config(ComparisonGroup::NeverTreated),
+    )
+    .expect_err("a duplicated panel row must be refused");
+    assert!(
+        matches!(err, did_methods::AttGtError::DuplicatePanelRow { .. }),
+        "got {err:?}"
+    );
+}
