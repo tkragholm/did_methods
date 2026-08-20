@@ -1274,3 +1274,93 @@ fn efficient_rc_route_matches_did_panel_false() {
     check_overall("efficient rc dynamic", &dynamic, &did_rc.dynamic);
     check_path("efficient rc dynamic", &dynamic, &did_rc.dynamic);
 }
+
+/// The fixed-weight aggregation understates, and by how much.
+///
+/// `aggregate_att_gt_event_time_with_influence` combines the cell influence
+/// vectors with FIXED weights. Under `ByTreatedCount` those weights are the
+/// empirical cohort shares, which are estimated from the sample, so the
+/// standard error omits `did:::wif` and comes out too small. `aggregate_att_gt`
+/// carries the term and matches `did`.
+///
+/// This is not a bug report against either function: the fixed-weight path is
+/// the right thing for `Equal` and `ByTotalWeight`, which are not cohort shares
+/// and which `did` has no counterpart for. It is a guard, so that a caller who
+/// wires `ByTreatedCount` into an event study learns the cost from a test
+/// rather than from a referee. `register-studies` had it wired for months.
+///
+/// The measured shape is the useful part: **the point estimates agree exactly,
+/// and the standard errors agree only where a single cohort contributes.**
+/// Wherever more than one does, the fixed-weight one is strictly smaller. That
+/// is why the defect survived: on a fixture with little cohort overlap most
+/// cells look right.
+#[test]
+fn the_fixed_weight_event_time_aggregation_understates_multi_cohort_cells() {
+    let (estimates, influence, panel, aggregations) = universal_run();
+    let r = &aggregations.dynamic;
+
+    let fixed = did_methods::aggregate_att_gt_event_time_with_influence(
+        &estimates,
+        &influence,
+        did_methods::AttGtAggregationConfig::default(),
+    )
+    .expect("fixed-weight aggregation");
+
+    let ported = did_methods::aggregate_att_gt(
+        &estimates,
+        &influence,
+        &panel,
+        did_methods::AggteConfig::default(),
+    )
+    .expect("cohort-share aggregation");
+
+    let egt = r.egt.clone().expect("egt");
+    let att = r.att_egt.clone().expect("att");
+    let se = r.se_egt.clone().expect("se");
+
+    let mut multi_cohort_cells = 0;
+    for (index, event_time) in egt.iter().enumerate() {
+        let Some(cell) = fixed
+            .estimates
+            .iter()
+            .find(|row| row.event_time == *event_time)
+        else {
+            continue;
+        };
+        let Some(want_se) = se[index] else { continue };
+
+        // Both paths reproduce did::aggte's point estimate.
+        assert!(
+            (cell.summary.estimate - att[index]).abs() < 1e-9,
+            "fixed-weight att {} vs did {} at e={event_time}",
+            cell.summary.estimate,
+            att[index]
+        );
+        let ported_cell = ported
+            .by_key
+            .iter()
+            .find(|row| row.key == *event_time)
+            .expect("ported cell");
+        assert!((ported_cell.att - att[index]).abs() < 1e-9);
+        assert!((ported_cell.se - want_se).abs() / want_se < 1e-6);
+
+        if cell.summary.components == 1 {
+            assert!(
+                (cell.summary.se - want_se).abs() / want_se < 1e-9,
+                "one cohort contributes, so there is nothing estimated to correct \
+                 for and the two must agree at e={event_time}"
+            );
+        } else {
+            multi_cohort_cells += 1;
+            assert!(
+                cell.summary.se < want_se,
+                "the fixed-weight se {} is not below did's {want_se} at e={event_time}",
+                cell.summary.se
+            );
+        }
+    }
+    assert!(
+        multi_cohort_cells >= 3,
+        "the fixture must exercise several overlapping cohorts, saw {multi_cohort_cells}"
+    );
+}
