@@ -37,14 +37,13 @@
 
 use std::collections::BTreeMap;
 
-use crate::methods::drdid::panel::estimate_drdid_panel;
+use crate::methods::drdid::panel::{PanelFlatInput, estimate_drdid_panel_flat};
 use crate::types::{
     AttGtDrConfig, AttGtDrObservation, AttGtError, AttGtEstimate, AttGtInfluenceOutput,
-    DrDidObservation,
 };
 
 /// One unit's contribution to a single `(g, t)` cell.
-struct PanelUnit {
+struct PanelUnit<'a> {
     /// Index into the sorted distinct-unit list, for influence alignment.
     unit_index: usize,
     treated: bool,
@@ -53,7 +52,61 @@ struct PanelUnit {
     weight: f64,
     /// Taken from the BASELINE row, which is what `did` does: covariates are
     /// measured before treatment so that treatment cannot have moved them.
-    covariates: Vec<f64>,
+    ///
+    /// BORROWED from that row rather than cloned. This was a `Vec<f64>` filled
+    /// by `clone_from` once per unit per cell, and the cell loop runs hundreds
+    /// of times per slice: on Study I's shape that is millions of small
+    /// allocations whose contents never change.
+    covariates: &'a [f64],
+}
+
+/// Buffers the cell loop reuses, so the per-cell cost is the cell's own size.
+///
+/// `collect_cell_units` built a `BTreeMap<i64, PanelUnit>` per cell: a node
+/// allocation and an O(log n) descent for every row of every cell, to rebuild a
+/// mapping `unit_universe` had already computed. `slots` is that mapping made
+/// dense, indexed by the unit position the influence vectors are aligned on
+/// anyway.
+///
+/// `touched` is what keeps the reuse honest. Clearing `slots` wholesale would
+/// cost the WHOLE panel per cell, which is worse than the map for a small cell;
+/// clearing only the entries a cell wrote costs the cell.
+struct CellScratch<'a> {
+    slots: Vec<Option<PanelUnit<'a>>>,
+    touched: Vec<usize>,
+    units: Vec<PanelUnit<'a>>,
+    treated: Vec<bool>,
+    delta: Vec<f64>,
+    weights: Vec<f64>,
+    design: Vec<f64>,
+}
+
+impl<'a> CellScratch<'a> {
+    fn new(unit_count: usize) -> Self {
+        let mut slots = Vec::new();
+        slots.resize_with(unit_count, || None);
+        Self {
+            slots,
+            touched: Vec::new(),
+            units: Vec::new(),
+            treated: Vec::new(),
+            delta: Vec::new(),
+            weights: Vec::new(),
+            design: Vec::new(),
+        }
+    }
+
+    fn reset(&mut self) {
+        for &index in &self.touched {
+            self.slots[index] = None;
+        }
+        self.touched.clear();
+        self.units.clear();
+        self.treated.clear();
+        self.delta.clear();
+        self.weights.clear();
+        self.design.clear();
+    }
 }
 
 /// The sorted distinct `unit_id` values, and a lookup from id to position.
@@ -80,15 +133,16 @@ fn unit_universe(observations: &[AttGtDrObservation]) -> Result<BTreeMap<i64, us
 ///
 /// Only units observed at BOTH periods survive. A unit seen at one period is not
 /// a panel observation for this cell, and `did` drops it the same way.
-fn collect_cell_units(
-    observations: &[AttGtDrObservation],
+fn collect_cell_units<'a>(
+    observations: &'a [AttGtDrObservation],
     positions: &BTreeMap<i64, usize>,
     group: i32,
     time: i32,
     baseline_time: i32,
     config: AttGtDrConfig,
-) -> Result<Vec<PanelUnit>, AttGtError> {
-    let mut by_unit: BTreeMap<i64, PanelUnit> = BTreeMap::new();
+    scratch: &mut CellScratch<'a>,
+) -> Result<(), AttGtError> {
+    scratch.reset();
     let mut duplicate: Option<i64> = None;
 
     for row in observations {
@@ -119,14 +173,20 @@ fn collect_cell_units(
             continue;
         };
 
-        let entry = by_unit.entry(id).or_insert_with(|| PanelUnit {
-            unit_index,
-            treated,
-            baseline_outcome: None,
-            follow_up_outcome: None,
-            weight: row.weight,
-            covariates: Vec::new(),
-        });
+        let slot = &mut scratch.slots[unit_index];
+        if slot.is_none() {
+            scratch.touched.push(unit_index);
+            *slot = Some(PanelUnit {
+                unit_index,
+                treated,
+                baseline_outcome: None,
+                follow_up_outcome: None,
+                weight: row.weight,
+                covariates: &[],
+            });
+        }
+        // `is_none` above: the slot is Some here.
+        let Some(entry) = slot.as_mut() else { continue };
 
         // `baseline_time == time` cannot reach here: the caller skips that cell.
         //
@@ -135,18 +195,18 @@ fn collect_cell_units(
         // change the estimate: a caller expressing "this unit counts four times"
         // by repeating its rows gets one unit and no error, and the weight they
         // thought they had applied simply vanishes. Use `weight` for that.
-        let slot = if row.time == baseline_time {
+        let outcome_slot = if row.time == baseline_time {
             &mut entry.baseline_outcome
         } else {
             &mut entry.follow_up_outcome
         };
-        if slot.is_some() {
+        if outcome_slot.is_some() {
             duplicate = Some(id);
         }
-        *slot = Some(row.outcome);
+        *outcome_slot = Some(row.outcome);
         if row.time == baseline_time {
             entry.weight = row.weight;
-            entry.covariates.clone_from(&row.covariates);
+            entry.covariates = row.covariates.as_slice();
         }
     }
 
@@ -158,58 +218,95 @@ fn collect_cell_units(
         });
     }
 
-    Ok(by_unit
-        .into_values()
-        .filter(|unit| unit.baseline_outcome.is_some() && unit.follow_up_outcome.is_some())
-        .collect())
+    // Ascending unit position, which is ascending unit id, which is the order
+    // the `BTreeMap` produced. Kept exactly: the design matrix is summed in this
+    // order, so a different one would move the last bits of every estimate.
+    scratch.touched.sort_unstable();
+    for index in 0..scratch.touched.len() {
+        let slot = scratch.touched[index];
+        if let Some(unit) = scratch.slots[slot].take()
+            && unit.baseline_outcome.is_some()
+            && unit.follow_up_outcome.is_some()
+        {
+            scratch.units.push(unit);
+        }
+    }
+    // `take` above emptied every slot this cell wrote, so the next `reset` has
+    // nothing left to clear but the bookkeeping.
+    Ok(())
 }
 
 /// Estimate one `(g, t)` cell and return the estimate plus a unit-aligned
 /// influence vector of length `unit_count`.
 fn estimate_panel_cell(
-    units: &[PanelUnit],
+    scratch: &mut CellScratch<'_>,
     unit_count: usize,
     group: i32,
     time: i32,
     config: AttGtDrConfig,
 ) -> Result<(AttGtEstimate, Vec<f64>), &'static str> {
-    let treated_count = units.iter().filter(|unit| unit.treated).count();
+    let treated_count = scratch.units.iter().filter(|unit| unit.treated).count();
     if treated_count == 0 {
         return Err("treated_panel");
     }
-    if treated_count == units.len() {
+    if treated_count == scratch.units.len() {
         return Err("control_panel");
     }
 
-    let rows = units
-        .iter()
-        .map(|unit| DrDidObservation {
-            treated: unit.treated,
-            // Both are Some by construction: collect_cell_units filters on it.
-            delta_outcome: unit.follow_up_outcome.unwrap_or_default()
-                - unit.baseline_outcome.unwrap_or_default(),
-            weight: unit.weight,
-            // The intercept is prepended HERE rather than left to the pair
-            // estimator, and the asymmetry is deliberate. The two DR routes in
-            // this crate disagree about whose job it is:
-            // `estimate_drdid_repeated_cross_section` always prepends one
-            // (`repeated.rs`, feature_count = covariate_count + 1), while
-            // `estimate_drdid_panel` treats its `covariates` as a finished design
-            // matrix and adds a constant column only when there are none at all.
-            // Left alone, the same `AttGtDrObservation` would be adjusted for
-            // `1 + X` through the RC route and for `X` alone through the panel
-            // route, which is a difference in the fitted model that produces a
-            // plausible number and fails nothing. R's `xformla = ~ x` means
-            // intercept plus x, so prepending here makes both routes agree with
-            // each other and with `did`.
-            covariates: std::iter::once(1.0)
-                .chain(unit.covariates.iter().copied())
-                .collect(),
-        })
-        .collect::<Vec<_>>();
+    // The design built FLAT, straight into a buffer the cell loop reuses.
+    //
+    // This was a `Vec<DrDidObservation>`, each owning a fresh `Vec<f64>` of the
+    // intercept and the unit's covariates, which `prepare_panel_data` then
+    // copied into a flat buffer of its own. Two allocations and two copies per
+    // unit per cell, to move numbers that were already sitting in the caller's
+    // rows. `estimate_drdid_panel_flat` takes the flat form directly.
+    //
+    // The intercept is prepended HERE rather than left to the pair estimator,
+    // and the asymmetry is deliberate. The two DR routes in this crate disagree
+    // about whose job it is: `estimate_drdid_repeated_cross_section` always
+    // prepends one (`repeated.rs`, feature_count = covariate_count + 1), while
+    // the panel route treats its covariates as a finished design matrix and adds
+    // a constant column only when there are none at all. Left alone, the same
+    // `AttGtDrObservation` would be adjusted for `1 + X` through the RC route
+    // and for `X` alone through the panel route, which is a difference in the
+    // fitted model that produces a plausible number and fails nothing. R's
+    // `xformla = ~ x` means intercept plus x, so prepending here makes both
+    // routes agree with each other and with `did`.
+    let covariate_count = scratch
+        .units
+        .first()
+        .map_or(0, |unit| unit.covariates.len());
+    let feature_count = covariate_count + 1;
+    scratch.treated.reserve(scratch.units.len());
+    scratch.delta.reserve(scratch.units.len());
+    scratch.weights.reserve(scratch.units.len());
+    scratch.design.reserve(scratch.units.len() * feature_count);
+    for unit in &scratch.units {
+        if unit.covariates.len() != covariate_count {
+            return Err("covariate_count");
+        }
+        scratch.treated.push(unit.treated);
+        // Both are Some by construction: collect_cell_units filters on it.
+        scratch.delta.push(
+            unit.follow_up_outcome.unwrap_or_default() - unit.baseline_outcome.unwrap_or_default(),
+        );
+        scratch.weights.push(unit.weight);
+        scratch.design.push(1.0);
+        scratch.design.extend_from_slice(unit.covariates);
+    }
 
-    let fit = estimate_drdid_panel(&rows, config.drdid).map_err(|_| "panel_fit")?;
-    if fit.influence_function.len() != units.len() {
+    let fit = estimate_drdid_panel_flat(
+        PanelFlatInput {
+            treated: &scratch.treated,
+            delta_outcome: &scratch.delta,
+            weight: &scratch.weights,
+            design_matrix_flat: &scratch.design,
+            feature_count,
+        },
+        config.drdid,
+    )
+    .map_err(|_| "panel_fit")?;
+    if fit.influence_function.len() != scratch.units.len() {
         return Err("influence_length");
     }
 
@@ -221,9 +318,10 @@ fn estimate_panel_cell(
     // on incompatible scales, which no single rescale downstream could repair.
     // `did` embeds its influence functions in the full sample the same way:
     // measured on mpdta cell (2004, 2005), R's psi is ours times 500/329.
-    let scale = crate::util::usize_to_f64(unit_count) / crate::util::usize_to_f64(units.len());
+    let scale =
+        crate::util::usize_to_f64(unit_count) / crate::util::usize_to_f64(scratch.units.len());
     let mut aligned = vec![0.0; unit_count];
-    for (unit, value) in units.iter().zip(&fit.influence_function) {
+    for (unit, value) in scratch.units.iter().zip(&fit.influence_function) {
         aligned[unit.unit_index] = value * scale;
     }
 
@@ -268,6 +366,8 @@ pub fn estimate_att_gt_dr_panel_with_influence(
 
     let mut estimates = Vec::new();
     let mut influence_functions = Vec::new();
+    // Allocated once for the whole grid, not once per cell. See `CellScratch`.
+    let mut scratch = CellScratch::new(unit_count);
 
     for group in treated_groups {
         let universal_baseline_time = group - config.att_gt.anticipation_periods - 1;
@@ -282,10 +382,17 @@ pub fn estimate_att_gt_dr_panel_with_influence(
                 continue;
             }
 
-            let units =
-                collect_cell_units(observations, &positions, group, time, baseline_time, config)?;
+            collect_cell_units(
+                observations,
+                &positions,
+                group,
+                time,
+                baseline_time,
+                config,
+                &mut scratch,
+            )?;
 
-            match estimate_panel_cell(&units, unit_count, group, time, config) {
+            match estimate_panel_cell(&mut scratch, unit_count, group, time, config) {
                 Ok((estimate, influence)) => {
                     estimates.push(estimate);
                     influence_functions.push(influence);

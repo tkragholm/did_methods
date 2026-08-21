@@ -51,6 +51,67 @@ pub fn estimate_drdid_panel(
     }
 
     let prepared = prepare_panel_data(observations)?;
+    estimate_from_prepared(prepared, config)
+}
+
+/// One row's worth of the design, laid out flat.
+///
+/// `DrDidObservation` owns a `Vec<f64>` per row, and `prepare_panel_data`'s
+/// first act is to copy every one of them into a single flat buffer. A caller
+/// that already has the numbers -- or that is about to build them anyway --
+/// pays for that vector twice: once to fill it, once to read it out.
+///
+/// `estimate_att_gt_dr_panel_with_influence` is such a caller, and it is the hot
+/// one. It runs this estimator once per `(g, t)` cell, and it was allocating a
+/// vector per unit per cell to hand over covariates it had already collected.
+/// On Study I's shape -- tens of thousands of units, a few hundred cells, 22
+/// covariates -- that is millions of small allocations per slice, and the cost
+/// showed: a fit grew LINEARLY in the covariate count, which is the signature of
+/// copying rather than of the linear algebra, whose Gram matrix is quadratic in
+/// it and whose solve is cubic.
+///
+/// `design_matrix_flat` is row-major and INCLUDES whatever intercept the caller
+/// wants; nothing is prepended here. That matches `estimate_drdid_panel`'s
+/// treatment of `DrDidObservation::covariates`, which is a finished design.
+#[derive(Debug, Clone, Copy)]
+pub struct PanelFlatInput<'a> {
+    /// One per row.
+    pub treated: &'a [bool],
+    /// Follow-up outcome minus baseline outcome, one per row.
+    pub delta_outcome: &'a [f64],
+    /// Sampling weight, one per row. Must be finite and positive.
+    pub weight: &'a [f64],
+    /// Row-major, `treated.len() * feature_count`.
+    pub design_matrix_flat: &'a [f64],
+    /// Columns per row, at least one.
+    pub feature_count: usize,
+}
+
+/// The panel DR estimator on a design that is already flat.
+///
+/// Identical arithmetic to [`estimate_drdid_panel`] -- the same validation, the
+/// same nuisance fits, the same influence function -- reached without building a
+/// vector per row. See [`PanelFlatInput`].
+///
+/// # Errors
+/// As [`estimate_drdid_panel`], plus [`DrDidError::InconsistentCovariateCount`]
+/// if `design_matrix_flat` is not `rows * feature_count` long.
+pub fn estimate_drdid_panel_flat(
+    input: PanelFlatInput<'_>,
+    config: DrDidConfig,
+) -> Result<DrDidEstimate, DrDidError> {
+    validate_drdid_config(config)?;
+    if input.treated.is_empty() {
+        return Err(DrDidError::EmptyInput);
+    }
+    let prepared = prepare_panel_flat(input)?;
+    estimate_from_prepared(prepared, config)
+}
+
+fn estimate_from_prepared(
+    prepared: PanelPreparedData,
+    config: DrDidConfig,
+) -> Result<DrDidEstimate, DrDidError> {
     let nuisance = fit_panel_nuisance_models(&prepared, config)?;
     let panel_att = estimate_panel_att_and_influence(
         &prepared,
@@ -76,6 +137,68 @@ pub fn estimate_drdid_panel(
         control_n: prepared.control_n,
         total_weight: prepared.total_weight,
         influence_function: panel_att.influence_function,
+    })
+}
+
+fn prepare_panel_flat(input: PanelFlatInput<'_>) -> Result<PanelPreparedData, DrDidError> {
+    let observation_count = input.treated.len();
+    let feature_count = input.feature_count.max(1);
+    if input.delta_outcome.len() != observation_count
+        || input.weight.len() != observation_count
+        || input.design_matrix_flat.len() != observation_count * feature_count
+    {
+        return Err(DrDidError::InconsistentCovariateCount {
+            expected: observation_count * feature_count,
+            actual: input.design_matrix_flat.len(),
+        });
+    }
+
+    let mut treated_n = 0_usize;
+    let mut control_n = 0_usize;
+    let mut total_weight = 0.0_f64;
+    let mut treated_indicator = Vec::with_capacity(observation_count);
+
+    for row in 0..observation_count {
+        if !input.delta_outcome[row].is_finite() {
+            return Err(DrDidError::InvalidOutcome {
+                value: input.delta_outcome[row],
+            });
+        }
+        let weight = input.weight[row];
+        if !weight.is_finite() || weight <= 0.0 {
+            return Err(DrDidError::InvalidWeight { value: weight });
+        }
+        if input.treated[row] {
+            treated_n += 1;
+            treated_indicator.push(1.0);
+        } else {
+            control_n += 1;
+            treated_indicator.push(0.0);
+        }
+        total_weight += weight;
+    }
+    for value in input.design_matrix_flat {
+        if !value.is_finite() {
+            return Err(DrDidError::InvalidCovariate { value: *value });
+        }
+    }
+
+    if treated_n == 0 {
+        return Err(DrDidError::NoTreated);
+    }
+    if control_n == 0 {
+        return Err(DrDidError::NoControl);
+    }
+
+    Ok(PanelPreparedData {
+        feature_count,
+        treated_n,
+        control_n,
+        total_weight,
+        treated_indicator,
+        outcome_delta: input.delta_outcome.to_vec(),
+        sampling_weights: input.weight.to_vec(),
+        design_matrix_flat: input.design_matrix_flat.to_vec(),
     })
 }
 
