@@ -5,6 +5,10 @@
 //! feature.
 
 use super::super::linear_algebra::diag_sqrt;
+
+/// Optimal bases each workspace keeps as starting points; see
+/// [`DenseSimplex::set_memory`].
+const BASIS_MEMORY: usize = 32;
 use super::dense_simplex::{DenseSimplex, LpError};
 use super::dual_geometry::solve_dual_max_with_clarabel_fallback;
 
@@ -17,6 +21,7 @@ use super::dual_geometry::solve_dual_max_with_clarabel_fallback;
 /// nonnegative row multipliers the conditional test reads. Only the costs
 /// change between solves, so every solve after the first starts from the
 /// previous basis.
+#[derive(Clone)]
 pub(in crate::inference::sensitivity) struct ConditionalMomentLpWorkspace {
     lp: DenseSimplex,
     k: usize,
@@ -57,8 +62,10 @@ impl ConditionalMomentLpWorkspace {
             .collect();
         let mut g = vec![0.0; k + 1];
         g[0] = 1.0;
+        let mut lp = DenseSimplex::new(&columns, &g);
+        lp.set_memory(BASIS_MEMORY);
         Ok(Self {
-            lp: DenseSimplex::new(&columns, &g),
+            lp,
             k,
             scale,
             cost_scratch: vec![0.0; rows],
@@ -66,6 +73,15 @@ impl ConditionalMomentLpWorkspace {
             delta_star: vec![0.0; k],
             lambda: vec![0.0; rows],
         })
+    }
+
+    /// Run phase one now, so clones of this workspace start from a feasible
+    /// basis. The least-favorable simulation clones one prepared workspace per
+    /// rayon job rather than building and feasibility-solving one per job.
+    /// Infeasibility is not an error here: the solves report it, as they would
+    /// have anyway.
+    pub(in crate::inference::sensitivity) fn prepare(&mut self) {
+        let _ = self.lp.prepare();
     }
 
     fn load(&mut self, y_vec: &[f64]) -> Result<(), String> {
@@ -113,7 +129,7 @@ impl ConditionalMomentLpWorkspace {
         y_vec: &[f64],
     ) -> Result<f64, String> {
         self.load(y_vec)?;
-        Ok(self.lp.duals()[0])
+        Ok(self.lp.dual_0())
     }
 
     pub(in crate::inference::sensitivity) const fn eta_star(&self) -> f64 {
@@ -150,8 +166,10 @@ impl<'a> DualMaxLpWorkspace<'a> {
         if width > 0 {
             g[0] = 1.0;
         }
+        let mut lp = DenseSimplex::new(w_t, &g);
+        lp.set_memory(BASIS_MEMORY);
         Ok(Self {
-            lp: DenseSimplex::new(w_t, &g),
+            lp,
             w_t,
             f_scratch: vec![0.0; dim],
         })

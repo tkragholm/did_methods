@@ -35,6 +35,9 @@ use crate::util::usize_to_f64;
 /// the tail of a fan-out both have.
 const LEAST_FAVORABLE_CV_PARALLEL_MIN_DRAWS: usize = 512;
 const LEAST_FAVORABLE_CV_PARALLEL_MIN_DIM: usize = 16;
+/// Fewest draws a rayon job takes. Without a floor, nested parallelism split a
+/// thousand draws into about 128 jobs, each paying for its own workspace.
+const LEAST_FAVORABLE_CV_MIN_DRAWS_PER_JOB: usize = 32;
 
 /// Compute the least-favorable critical value for an ARP design.
 ///
@@ -78,12 +81,29 @@ pub(in crate::inference::sensitivity) fn compute_least_favorable_cv_uncached(
     let draw_results = if sims >= LEAST_FAVORABLE_CV_PARALLEL_MIN_DRAWS
         && sigma.len() >= LEAST_FAVORABLE_CV_PARALLEL_MIN_DIM
     {
+        // One workspace per rayon job. Rayon splits a thousand draws into well
+        // over a hundred jobs under nested parallelism, so the job count is
+        // capped, and on the dense simplex the phase-one work is done once and
+        // cloned rather than repeated per job.
+        #[cfg(feature = "dense-lp")]
+        let template = {
+            let mut template = ConditionalMomentLpWorkspace::new(x_matrix, sigma);
+            if let Ok(workspace) = template.as_mut() {
+                workspace.prepare();
+            }
+            template
+        };
+        #[cfg(feature = "dense-lp")]
+        let make_workspace = || template.clone();
+        #[cfg(not(feature = "dense-lp"))]
+        let make_workspace = || ConditionalMomentLpWorkspace::new(x_matrix, sigma);
         (0..sims)
             .into_par_iter()
+            .with_min_len(LEAST_FAVORABLE_CV_MIN_DRAWS_PER_JOB)
             .map_init(
                 || {
                     (
-                        ConditionalMomentLpWorkspace::new(x_matrix, sigma),
+                        make_workspace(),
                         vec![0.0; sigma.len()],
                         vec![0.0; sigma.len()],
                         vec![0.0; sigma.len()],
