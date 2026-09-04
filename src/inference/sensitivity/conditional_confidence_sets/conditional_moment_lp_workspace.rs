@@ -122,6 +122,13 @@ impl ConditionalMomentLpWorkspace {
         model.make_quiet();
         model.set_option("solver", "simplex");
         model.set_option("presolve", "off");
+        // One thread. On its first solve HiGHS gives the calling thread a task
+        // executor with half the machine's hardware threads, and `Highs_destroy`
+        // joins them again, so under the default every workspace lifecycle
+        // spawns and joins that many OS threads. These LPs have a few dozen
+        // rows, and rayon already runs the functionals and the simulation draws
+        // in parallel.
+        model.set_option("threads", 1);
 
         Ok(Self {
             model: Some(model),
@@ -486,5 +493,27 @@ mod tests {
         for (observed, expected) in workspace.lambda().iter().zip(reference.lambda.iter()) {
             assert!((observed - expected).abs() < 1e-7);
         }
+    }
+
+    #[test]
+    fn highs_conditional_workspace_solves_on_one_thread() {
+        let x_matrix = vec![Vec::new(), Vec::new(), Vec::new()];
+        let sigma = vec![
+            vec![1.2, 0.1, 0.05],
+            vec![0.1, 0.9, 0.08],
+            vec![0.05, 0.08, 1.1],
+        ];
+        let mut workspace = ConditionalMomentLpWorkspace::new(&x_matrix, &sigma).unwrap();
+        assert_eq!(highs_threads_option(workspace.model.as_mut().unwrap()), 1);
+    }
+
+    fn highs_threads_option(model: &mut highs::Model) -> highs_sys::HighsInt {
+        let name = std::ffi::CString::new("threads").unwrap();
+        let mut value: highs_sys::HighsInt = -1;
+        let status = unsafe {
+            highs_sys::Highs_getIntOptionValue(model.as_mut_ptr(), name.as_ptr(), &raw mut value)
+        };
+        assert_eq!(status, highs_sys::STATUS_OK);
+        value
     }
 }

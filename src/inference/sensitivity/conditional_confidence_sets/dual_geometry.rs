@@ -417,6 +417,13 @@ impl<'a> DualMaxLpWorkspace<'a> {
         model.make_quiet();
         model.set_option("solver", "simplex");
         model.set_option("presolve", "off");
+        // One thread. On its first solve HiGHS gives the calling thread a task
+        // executor with half the machine's hardware threads, and `Highs_destroy`
+        // joins them again, so under the default every workspace lifecycle
+        // spawns and joins that many OS threads. These LPs have a few dozen
+        // rows, and rayon already runs the functionals and the simulation draws
+        // in parallel.
+        model.set_option("threads", 1);
         Ok(Self {
             model: Some(model),
             column_indices,
@@ -797,5 +804,19 @@ mod tests {
             HighsModelStatus::Unknown,
             &diagnostic
         ));
+    }
+
+    #[test]
+    fn highs_dual_workspace_solves_on_one_thread() {
+        let w_t = vec![vec![1.0, 0.0], vec![1.0, 1.0], vec![1.0, -1.0]];
+        let mut workspace = DualMaxLpWorkspace::new(&w_t).unwrap();
+        let model = workspace.model.as_mut().unwrap();
+        let name = std::ffi::CString::new("threads").unwrap();
+        let mut value: highs_sys::HighsInt = -1;
+        let status = unsafe {
+            highs_sys::Highs_getIntOptionValue(model.as_mut_ptr(), name.as_ptr(), &raw mut value)
+        };
+        assert_eq!(status, highs_sys::STATUS_OK);
+        assert_eq!(value, 1);
     }
 }
