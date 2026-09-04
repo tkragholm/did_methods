@@ -209,11 +209,28 @@ pub struct RelativeMagnitudeConfidenceSetConfig {
 impl RelativeMagnitudeConfidenceSetConfig {
     /// Build the default conditional-CS configuration for a target confidence
     /// level.
+    /// `hybrid_kappa` is `alpha / 10`, which is what `HonestDiD` uses.
+    ///
+    /// It was `alpha / 20` until 4 September 2026, which is not a defensible
+    /// place to differ: the whole point of this surface is to answer a question
+    /// about parallel trends in the terms the literature states it in, and a
+    /// first stage calibrated differently from the reference package is not
+    /// comparable with the numbers a reader has seen elsewhere. The smoothness
+    /// configuration next door was already `alpha / 10`, so the two families
+    /// also disagreed with each other.
+    ///
+    /// It was not a free choice numerically either. `kappa` selects the
+    /// `1 - kappa` quantile of the simulated least-favorable distribution from
+    /// a fixed 1,000 draws, so `alpha / 20` asked for the 0.9975 quantile --
+    /// effectively the third largest draw of a thousand -- where `alpha / 10`
+    /// asks for the tenth. The tail estimate the whole first stage rests on was
+    /// three times noisier for no stated reason. A fixed seed makes that
+    /// reproducible, not accurate.
     #[must_use]
     pub fn from_inference(inference: InferenceConfig) -> Self {
         Self {
             hybrid: RelativeMagnitudeHybrid::LeastFavorable,
-            hybrid_kappa: (1.0 - inference.confidence_level) / 20.0,
+            hybrid_kappa: (1.0 - inference.confidence_level) / 10.0,
         }
     }
 

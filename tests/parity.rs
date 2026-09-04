@@ -6,7 +6,7 @@ use did_methods::{
     HonestJointPathMethod, HonestOptimizationSurfaceAdaptiveConfig,
     HonestOptimizationSurfaceAdaptiveRunConfig, HonestOptimizationSurfaceConfig,
     HonestPostFunctional, HonestSensitivity, InferenceConfig, PolynomialBasis,
-    RelativeMagnitudeConfidenceSetConfig, RelativeMagnitudeHybrid, TripleDidObservation,
+    RelativeMagnitudeConfidenceSetConfig, TripleDidObservation,
     assess_honest_event_study_directional_region_with_config,
     assess_honest_event_study_joint_path_region,
     assess_honest_event_study_joint_path_region_with_config,
@@ -692,10 +692,7 @@ fn honest_delta_rm_conditional_default_wrapper_matches_explicit_lf_config() {
         &rm_ref.post_weights,
         0.5,
         inference,
-        RelativeMagnitudeConfidenceSetConfig {
-            hybrid: RelativeMagnitudeHybrid::LeastFavorable,
-            hybrid_kappa: (1.0 - inference.confidence_level) / 20.0,
-        },
+        RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
     )
     .expect("explicit LF conditional cs");
 
@@ -788,10 +785,7 @@ fn honest_assessment_default_wrapper_matches_explicit_lf_config() {
         HonestSensitivity::RelativeMagnitude(1.0),
         inference,
         0.0,
-        RelativeMagnitudeConfidenceSetConfig {
-            hybrid: RelativeMagnitudeHybrid::LeastFavorable,
-            hybrid_kappa: (1.0 - inference.confidence_level) / 20.0,
-        },
+        RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
     )
     .expect("explicit LF assessment");
 
@@ -919,10 +913,7 @@ fn honest_post_functional_with_config_matches_explicit_functional_config() {
         start_period: 0,
         end_period: 3,
     };
-    let config = RelativeMagnitudeConfidenceSetConfig {
-        hybrid: RelativeMagnitudeHybrid::LeastFavorable,
-        hybrid_kappa: (1.0 - inference.confidence_level) / 20.0,
-    };
+    let config = RelativeMagnitudeConfidenceSetConfig::from_inference(inference);
 
     let direct = did_methods::assess_honest_event_study_functional_with_config(
         &input,
@@ -1067,10 +1058,7 @@ fn honest_delta_rm_flci_default_matches_explicit_lf_config() {
     let wrapped = compute_relative_magnitude_flci(&problem).expect("wrapped flci");
     let explicit = compute_relative_magnitude_flci_with_config(
         &problem,
-        RelativeMagnitudeConfidenceSetConfig {
-            hybrid: RelativeMagnitudeHybrid::LeastFavorable,
-            hybrid_kappa: (1.0 - inference.confidence_level) / 20.0,
-        },
+        RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
     )
     .expect("explicit LF flci");
 
@@ -1167,10 +1155,7 @@ fn honest_post_functional_flci_default_matches_explicit_lf_config() {
         2.0,
         inference,
         0.0,
-        RelativeMagnitudeConfidenceSetConfig {
-            hybrid: RelativeMagnitudeHybrid::LeastFavorable,
-            hybrid_kappa: (1.0 - inference.confidence_level) / 20.0,
-        },
+        RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
     )
     .expect("explicit LF flci");
 
@@ -1241,10 +1226,7 @@ fn honest_joint_path_region_default_matches_explicit_lf_config() {
         HonestSensitivity::RelativeMagnitude(1.0),
         inference,
         0.0,
-        RelativeMagnitudeConfidenceSetConfig {
-            hybrid: RelativeMagnitudeHybrid::LeastFavorable,
-            hybrid_kappa: (1.0 - inference.confidence_level) / 20.0,
-        },
+        RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
         HonestJointPathConfig::default_for_production(),
     )
     .expect("explicit joint region");
@@ -1689,18 +1671,24 @@ fn honest_post_functional_multi_flci_wrapper_matches_direct_problem_path() {
 
 /// How far a simultaneous-region bound may sit from R's.
 ///
-/// The residual is grid resolution: R's fixtures were generated over 10,000
-/// points spanning +/-40 standard errors, and this crate inverts over 1,000
-/// spanning the identified set +/-20, so the two land on different lattices.
-/// Measured, the largest gap across the joint-path fixture is 0.0029.
+/// The residual is grid resolution, and it is deterministic: R's fixtures were
+/// generated over 10,000 points spanning +/-40 standard errors, this crate
+/// inverts over 1,000 spanning the identified set +/-20, and the two lattices
+/// do not coincide. Measured, the largest gap across the joint-path fixture is
+/// 0.0013, so this leaves half again as much room.
 ///
 /// It was `1e-2`, which was not a tolerance so much as an absence of one: the
 /// rest of this file asserts at `5e-3`, and `1e-2` was wide enough to hide a
 /// real defect. The prepared confidence-set path used to skip any branch whose
-/// identified set was infeasible, and it moved the period-0 upper bound by
-/// 0.0046 -- comfortably inside `1e-2`, and caught here at `4e-3`. See
-/// `branch_anchor_idx`.
-const HONEST_REGION_TOLERANCE: f64 = 4e-3;
+/// identified set was infeasible, which moved the period-0 upper bound by
+/// 0.0046 -- comfortably inside `1e-2`. See `branch_anchor_idx`; the exact
+/// guard on that defect is now a unit test, and this is the outer check.
+///
+/// The gap halved again when `hybrid_kappa` became `alpha / 10`: these fixtures
+/// come from `HonestDiD`, which calibrates its first stage there, and this
+/// crate was asking for a different quantile of the least-favorable
+/// distribution than the package it is being compared against.
+const HONEST_REGION_TOLERANCE: f64 = 2e-3;
 
 #[test]
 fn honest_joint_path_region_bonferroni_matches_r_fixture() {
