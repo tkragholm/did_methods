@@ -1,8 +1,11 @@
-//! The two LP workspaces on the dense simplex instead of HiGHS.
+//! The two LP workspaces of the conditional test, on the dense simplex.
 //!
-//! Same contracts as the HiGHS-backed structs of the same names, so the
-//! consumers do not know which one they have. Selected by the `dense-lp`
-//! feature.
+//! Until September 2026 both ran on HiGHS. A general solver on programs of a
+//! few dozen rows spent nearly all its time on bookkeeping, and every model it
+//! built spawned and joined a thread pool of its own; the simplex in
+//! [`super::dense_simplex`] gives the same answers, to the bit on the R
+//! fixtures and on Study I's surface, at a fiftieth of the time, with no C++
+//! in the build.
 
 use super::super::linear_algebra::diag_sqrt;
 

@@ -8,9 +8,8 @@ use thiserror::Error;
 
 pub mod export;
 // Gated: the HonestDiD sensitivity machinery is the only consumer of the
-// `clarabel` and `highs` solvers, whose C/C++ builds are the risk in a
-// cross-compiled Windows wheel. Off by default so the register pipeline links
-// neither. Enable with `--features honest`.
+// `clarabel` conic solver. Off by default so the register pipeline does not
+// link it. Enable with `--features honest`.
 #[cfg(feature = "honest")]
 pub mod sensitivity;
 pub mod vcov;

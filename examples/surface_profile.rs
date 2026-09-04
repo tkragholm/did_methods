@@ -6,8 +6,8 @@
 //! serial here so a profiler attributes time to functions rather than to the
 //! rayon pool.
 //!
-//! `cargo run --release --example surface_profile --features dense-lp`
-//! `cargo run --release --example surface_profile --features dense-lp,hotpath`
+//! `cargo run --release --example surface_profile --features honest -- 3 many`
+//! `cargo run --release --example surface_profile --features honest,hotpath`
 
 use std::time::Instant;
 

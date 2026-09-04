@@ -161,11 +161,10 @@ pub(in crate::inference::sensitivity) fn compute_least_favorable_cv_from_draws(
     }
     let sims = draws.len() / dim;
     let draw_results = if parallel_arm(sims, dim) {
-        // One workspace per rayon job. Rayon splits a thousand draws into well
-        // over a hundred jobs under nested parallelism, so the job count is
-        // capped, and on the dense simplex the phase-one work is done once and
-        // cloned rather than repeated per job.
-        #[cfg(feature = "dense-lp")]
+        // One workspace per rayon job, cloned from a template whose phase one
+        // is already done. Rayon splits a thousand draws into well over a
+        // hundred jobs under nested parallelism, so the job count is capped
+        // too.
         let template = {
             let mut template = ConditionalMomentLpWorkspace::new(x_matrix, sigma);
             if let Ok(workspace) = template.as_mut() {
@@ -173,10 +172,7 @@ pub(in crate::inference::sensitivity) fn compute_least_favorable_cv_from_draws(
             }
             template
         };
-        #[cfg(feature = "dense-lp")]
         let make_workspace = || template.clone();
-        #[cfg(not(feature = "dense-lp"))]
-        let make_workspace = || ConditionalMomentLpWorkspace::new(x_matrix, sigma);
         draws
             .par_chunks_exact(dim)
             .with_min_len(LEAST_FAVORABLE_CV_MIN_DRAWS_PER_JOB)

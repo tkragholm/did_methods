@@ -10,17 +10,12 @@ autotests = false
 [features]
 default = []
 # HonestDiD sensitivity analysis (Rambachan-Roth). Optional because it is the
-# only consumer of the `clarabel` and `highs` LP/QP solvers: `highs-sys` builds
-# HiGHS from C++, which is the main portability risk when cross-compiling to
-# x86_64-pc-windows-msvc. Consumers that only need ATT(g,t), DRDID and the
-# aggregations link neither solver.
-honest = ["dep:clarabel", "dep:highs", "dep:highs-sys"]
+# only consumer of the `clarabel` conic solver; the linear programs of the
+# conditional test run on the crate's own dense simplex. Consumers that only
+# need ATT(g,t), DRDID and the aggregations link no solver.
+honest = ["dep:clarabel"]
 # The parity suite covers the honest surface as well, so it implies the feature.
 parity-tests = ["honest"]
-# The two ARP LP workspaces on the crate's own dense simplex instead of HiGHS.
-# Same answers on the fixtures; no C++ in the build and no per-solve solver
-# object. HiGHS stays the reference until this has run a production surface.
-dense-lp = ["honest"]
 hotpath = ["dep:hotpath", "hotpath/hotpath"]
 hotpath-alloc = ["hotpath", "hotpath/hotpath-alloc"]
 
@@ -31,8 +26,6 @@ argmin-math = { git = "https://github.com/cloudsftp/argmin", package = "argmin-m
 clarabel = { version = "0.11.1", optional = true }
 dyn-stack = "0.13.2"
 faer = { version = "0.24.0", features = ["nightly", "perf-warn"] }
-highs = { version = "2.0.0", optional = true }
-highs-sys = { version = "1.14.2", optional = true }
 itertools = "0.14"
 rand = "0.10.0"
 rayon = "1.11.0"
