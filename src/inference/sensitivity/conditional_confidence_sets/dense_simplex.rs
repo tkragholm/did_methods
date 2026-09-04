@@ -241,6 +241,75 @@ impl DenseSimplex {
         Ok(())
     }
 
+    /// The current basis, one column index per position; `>= n` is an
+    /// artificial column.
+    pub(in crate::inference::sensitivity) fn basis(&self) -> &[usize] {
+        &self.basis
+    }
+
+    /// The basic values, by basis position.
+    pub(in crate::inference::sensitivity) fn basic_values(&self) -> &[f64] {
+        &self.xb
+    }
+
+    pub(in crate::inference::sensitivity) const fn num_columns(&self) -> usize {
+        self.n
+    }
+
+    /// The interval of `t` on which the current basis stays optimal for the
+    /// costs `c0 + t c1`.
+    ///
+    /// A basis is optimal when every nonbasic reduced cost is at most the
+    /// pricing tolerance, and for affine costs each reduced cost is affine in
+    /// `t`, so the interval is read off two reduced-cost vectors. Meant to be
+    /// called right after a solve at some `t` in the interval; `y0` and `y1`
+    /// are scratch of length `m`.
+    pub(in crate::inference::sensitivity) fn optimality_interval(
+        &self,
+        c0: &[f64],
+        c1: &[f64],
+        y0: &mut Vec<f64>,
+        y1: &mut Vec<f64>,
+    ) -> (f64, f64) {
+        let m = self.m;
+        y0.clear();
+        y0.resize(m, 0.0);
+        y1.clear();
+        y1.resize(m, 0.0);
+        for (r, &j) in self.basis.iter().enumerate() {
+            if j >= self.n {
+                continue;
+            }
+            let row = &self.binv[r * m..(r + 1) * m];
+            let (cb0, cb1) = (c0[j], c1[j]);
+            if cb0 != 0.0 {
+                for (y, b) in y0.iter_mut().zip(row) {
+                    *y += cb0 * b;
+                }
+            }
+            if cb1 != 0.0 {
+                for (y, b) in y1.iter_mut().zip(row) {
+                    *y += cb1 * b;
+                }
+            }
+        }
+        let (mut lo, mut hi) = (f64::NEG_INFINITY, f64::INFINITY);
+        for j in 0..self.n {
+            if self.is_basic[j] {
+                continue;
+            }
+            let d0 = c0[j] - dot(self.column(j), y0);
+            let d1 = c1[j] - dot(self.column(j), y1);
+            // d0 + t d1 <= TOL
+            if d1 > 0.0 {
+                hi = hi.min((TOL_REDUCED_COST - d0) / d1);
+            } else if d1 < 0.0 {
+                lo = lo.max((TOL_REDUCED_COST - d0) / d1);
+            }
+        }
+        (lo, hi)
+    }
+
     /// The objective of a basis under the current costs: `Σ c_j x_Bj` over its
     /// original columns.
     fn basis_objective(&self, basis: &[usize], xb: &[f64]) -> f64 {

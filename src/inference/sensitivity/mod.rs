@@ -142,7 +142,8 @@ pub use summary_api::{
     PostPeriodSensitivitySummary, SensitivityRestrictionKind, SensitivitySummary,
     SensitivitySummaryMethod, SensitivitySummaryRow,
     estimate_smoothness_upper_bound_from_pretrends, summarize_post_period_sensitivity,
-    summarize_relative_magnitude_sensitivity, summarize_smoothness_sensitivity,
+    summarize_relative_magnitude_sensitivity, summarize_relative_magnitude_sensitivity_many,
+    summarize_smoothness_sensitivity,
 };
 
 #[cfg(test)]

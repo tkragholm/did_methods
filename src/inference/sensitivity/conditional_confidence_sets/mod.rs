@@ -16,5 +16,6 @@ pub(in crate::inference::sensitivity) use dual_geometry::{
     recover_dual_vertex_from_binding, row_nonbinding_coeff_row_major_into,
 };
 pub(in crate::inference::sensitivity) use least_favorable_critical_value::{
-    compute_least_favorable_cv, compute_least_favorable_cv_uncached,
+    compute_least_favorable_cv, compute_least_favorable_cv_from_draws,
+    compute_least_favorable_cv_uncached, simulation_draws,
 };

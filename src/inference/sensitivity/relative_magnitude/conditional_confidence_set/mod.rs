@@ -28,7 +28,8 @@ use super::super::adaptive_grid::{
 };
 use super::super::conditional_confidence_sets::{
     ConditionalMomentLpWorkspace, DualMaxLpWorkspace, build_v_b_row_major_into,
-    compute_least_favorable_cv, compute_least_favorable_cv_uncached, dual_conditional_test,
+    compute_least_favorable_cv, compute_least_favorable_cv_from_draws,
+    compute_least_favorable_cv_uncached, dual_conditional_test, simulation_draws,
     recover_dual_vertex_from_binding, row_nonbinding_coeff_row_major_into,
 };
 use super::super::linear_algebra::{
@@ -847,9 +848,34 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
 }
 
 #[allow(clippy::too_many_lines)]
+/// The least-favorable simulation draws for one branch, from its constraint
+/// matrix alone. See [`prepare_relative_magnitude_branch_draws`]'s caller for
+/// why they are made once per branch rather than once per functional.
+///
+/// # Errors
+/// Returns an error if the branch's ARP covariance is not positive definite.
+pub(in crate::inference::sensitivity) fn prepare_relative_magnitude_branch_draws(
+    input: &HonestEventStudyInput,
+    num_pre: usize,
+    a_matrix: &[Vec<f64>],
+) -> Result<Vec<f64>, String> {
+    let rows_for_arp = find_post_period_constraint_rows(a_matrix, num_pre);
+    let sigma_y = sandwich_covariance(a_matrix, &input.covariance);
+    let sigma_arp = super::super::linear_algebra::subset_square_matrix(&sigma_y, &rows_for_arp);
+    simulation_draws(&sigma_arp, LEAST_FAVORABLE_SIMS, LEAST_FAVORABLE_SEED)
+}
+
+/// Draw count and seed of every least-favorable simulation on this path.
+const LEAST_FAVORABLE_SIMS: usize = 1_000;
+const LEAST_FAVORABLE_SEED: u64 = 0;
+
+/// `shared_draws` are this branch's draws from
+/// [`prepare_relative_magnitude_branch_draws`]; without them the simulation
+/// makes its own, which are the same draws.
 pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_accepted_range_for_matrix(
     branch_problem: &RelativeMagnitudeConditionalBranch<'_>,
     a_matrix: &[Vec<f64>],
+    shared_draws: Option<&[f64]>,
 ) -> Result<Option<AcceptedGridRange>, String> {
     let rows_for_arp = find_post_period_constraint_rows(a_matrix, branch_problem.num_pre);
     let a_post: Vec<Vec<f64>> = a_matrix
@@ -872,11 +898,23 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_accep
     let sigma_arp = super::super::linear_algebra::subset_square_matrix(&sigma_y, &rows_for_arp);
     let sd_arp = diag_sqrt(&sigma_arp);
     let w_t = build_w_t(&x_arp, &sd_arp);
-    let lf_cv = match branch_problem.hybrid {
-        RelativeMagnitudeHybrid::LeastFavorable => {
-            compute_least_favorable_cv(&x_arp, &sigma_arp, branch_problem.hybrid_kappa, 1_000, 0)?
+    let lf_cv = match (branch_problem.hybrid, shared_draws) {
+        (RelativeMagnitudeHybrid::LeastFavorable, Some(draws)) => {
+            compute_least_favorable_cv_from_draws(
+                &x_arp,
+                &sigma_arp,
+                branch_problem.hybrid_kappa,
+                draws,
+            )?
         }
-        RelativeMagnitudeHybrid::ArpOnly => f64::INFINITY,
+        (RelativeMagnitudeHybrid::LeastFavorable, None) => compute_least_favorable_cv(
+            &x_arp,
+            &sigma_arp,
+            branch_problem.hybrid_kappa,
+            LEAST_FAVORABLE_SIMS,
+            LEAST_FAVORABLE_SEED,
+        )?,
+        (RelativeMagnitudeHybrid::ArpOnly, _) => f64::INFINITY,
     };
     compute_relative_magnitude_branch_accepted_range_for_branch(
         branch_problem.grid,

@@ -145,6 +145,20 @@ impl ConditionalMomentLpWorkspace {
     }
 }
 
+/// Pieces a dual-max workspace remembers per affine cost family; see
+/// [`DualMaxLpWorkspace::solve_for_c`].
+const DUAL_PIECES: usize = 64;
+
+/// One basis of the dual max program with the interval of `c` on which it is
+/// optimal for the current affine cost family.
+#[derive(Clone)]
+struct Piece {
+    lo: f64,
+    hi: f64,
+    basis: Vec<usize>,
+    xb: Vec<f64>,
+}
+
 /// Reusable workspace for the dual max LP,
 /// `max f'x  s.t.  W' x = e_0,  x ≥ 0`, which is the simplex's own form.
 pub(in crate::inference::sensitivity) struct DualMaxLpWorkspace<'a> {
@@ -153,6 +167,15 @@ pub(in crate::inference::sensitivity) struct DualMaxLpWorkspace<'a> {
     /// equalities.
     w_t: &'a [Vec<f64>],
     f_scratch: Vec<f64>,
+    /// The affine family `f = f0 + c f1` the pieces belong to. A call with a
+    /// different family clears them.
+    f0: Vec<f64>,
+    f1: Vec<f64>,
+    has_family: bool,
+    pieces: Vec<Piece>,
+    pieces_next: usize,
+    y0_scratch: Vec<f64>,
+    y1_scratch: Vec<f64>,
 }
 
 impl<'a> DualMaxLpWorkspace<'a> {
@@ -172,9 +195,26 @@ impl<'a> DualMaxLpWorkspace<'a> {
             lp,
             w_t,
             f_scratch: vec![0.0; dim],
+            f0: vec![0.0; dim],
+            f1: vec![0.0; dim],
+            has_family: false,
+            pieces: Vec::new(),
+            pieces_next: 0,
+            y0_scratch: Vec::with_capacity(width),
+            y1_scratch: Vec::with_capacity(width),
         })
     }
 
+    /// The optimum `f' x` for `f = s_t + c σ_γ / σ_b²`.
+    ///
+    /// The bisection above calls this twenty-odd times per acceptance test with
+    /// the same `s_t`, `σ_γ` and `σ_b²` and a moving `c`, so the cost vector is
+    /// affine in `c` and the optimum is convex piecewise-linear in it. Each
+    /// solve therefore records the basis it ended on together with the interval
+    /// of `c` on which that basis stays optimal, read off two reduced-cost
+    /// vectors. A later `c` inside a recorded interval is answered from that
+    /// basis's values with no solve, and with the same arithmetic the solve
+    /// would have used, so the number is the same one.
     pub(in crate::inference::sensitivity) fn solve_for_c(
         &mut self,
         s_t: &[f64],
@@ -193,9 +233,60 @@ impl<'a> DualMaxLpWorkspace<'a> {
         {
             *f_value = c.mul_add(*sigma_gamma_value / sigma_b2, *s_value);
         }
+        let same_family = self.has_family
+            && self.f0 == s_t
+            && self
+                .f1
+                .iter()
+                .zip(sigma_gamma)
+                .all(|(f1, sigma_gamma_value)| *f1 == sigma_gamma_value / sigma_b2);
+        if same_family {
+            if let Some(piece) = self
+                .pieces
+                .iter()
+                .find(|piece| piece.lo <= c && c <= piece.hi)
+            {
+                let n = self.lp.num_columns();
+                let mut objective = 0.0;
+                for (&j, &x) in piece.basis.iter().zip(&piece.xb) {
+                    if j < n {
+                        objective += self.f_scratch[j] * x.max(0.0);
+                    }
+                }
+                return Ok(objective);
+            }
+        } else {
+            self.f0.copy_from_slice(s_t);
+            for (f1, sigma_gamma_value) in self.f1.iter_mut().zip(sigma_gamma) {
+                *f1 = sigma_gamma_value / sigma_b2;
+            }
+            self.has_family = true;
+            self.pieces.clear();
+            self.pieces_next = 0;
+        }
         self.lp.set_cost(&self.f_scratch);
         match self.lp.solve() {
-            Ok(()) => Ok(self.lp.objective()),
+            Ok(()) => {
+                let (lo, hi) = self.lp.optimality_interval(
+                    &self.f0,
+                    &self.f1,
+                    &mut self.y0_scratch,
+                    &mut self.y1_scratch,
+                );
+                let piece = Piece {
+                    lo,
+                    hi,
+                    basis: self.lp.basis().to_vec(),
+                    xb: self.lp.basic_values().to_vec(),
+                };
+                if self.pieces.len() < DUAL_PIECES {
+                    self.pieces.push(piece);
+                } else {
+                    self.pieces[self.pieces_next] = piece;
+                    self.pieces_next = (self.pieces_next + 1) % DUAL_PIECES;
+                }
+                Ok(self.lp.objective())
+            }
             Err(LpError::Infeasible) => Err("HonestDiD dual max program is infeasible".to_string()),
             Err(LpError::Unbounded) => Err("HonestDiD dual max program is unbounded".to_string()),
             Err(status) => solve_dual_max_with_clarabel_fallback(self.w_t, &self.f_scratch)

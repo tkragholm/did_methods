@@ -13,7 +13,7 @@ use std::time::Instant;
 
 use did_methods::{
     HonestEventStudyInput, HonestRelativeMagnitudeBound, InferenceConfig,
-    summarize_relative_magnitude_sensitivity,
+    summarize_relative_magnitude_sensitivity, summarize_relative_magnitude_sensitivity_many,
 };
 
 fn study() -> HonestEventStudyInput {
@@ -80,10 +80,31 @@ fn main() {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(1);
+    let many = std::env::args().nth(2).is_some_and(|mode| mode == "many");
     let start = Instant::now();
     let mut rows = 0usize;
     let mut checksum = 0.0;
     for _ in 0..repeats {
+        if many {
+            let functionals = functionals();
+            let weights: Vec<&[f64]> = functionals.iter().map(|(_, w)| w.as_slice()).collect();
+            let summaries = summarize_relative_magnitude_sensitivity_many(
+                &input,
+                inference,
+                &weights,
+                None,
+                Some(&grid),
+                Some(HonestRelativeMagnitudeBound::ParallelTrendsDeviation),
+                None,
+                None,
+            )
+            .expect("surface");
+            for summary in summaries {
+                rows += summary.rows.len();
+                checksum += summary.rows.iter().map(|r| r.lb + r.ub).sum::<f64>();
+            }
+            continue;
+        }
         for (_, weights) in functionals() {
             let summary = summarize_relative_magnitude_sensitivity(
                 &input,
@@ -102,7 +123,8 @@ fn main() {
     }
     let elapsed = start.elapsed();
     println!(
-        "{repeats} surface(s): {rows} rows, checksum {checksum:.9}, {:.3} s per surface",
+        "{repeats} surface(s){}: {rows} rows, checksum {checksum:.9}, {:.3} s per surface",
+        if many { ", many" } else { "" },
         elapsed.as_secs_f64() / repeats as f64
     );
 }

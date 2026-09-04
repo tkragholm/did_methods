@@ -5,6 +5,7 @@ use super::relative_magnitude::{
     RelativeMagnitudeFamily, compute_original_confidence_set,
     compute_relative_magnitude_family_conditional_cs_with_precomputed_sets,
     compute_relative_magnitude_family_identified_set, geometry::basis_post_weights,
+    prepare_relative_magnitude_family_draws,
 };
 use super::smoothness::least_favorable_intervals::{
     SmoothnessFlciConfig, build_smoothness_flci_problem, compute_smoothness_flci_with_config,
@@ -15,11 +16,13 @@ use super::smoothness::{
     compute_smoothness_confidence_set_with_config,
 };
 use super::{
-    HonestBiasDirection, HonestConditionalConfidenceSet, HonestEventStudyInput, HonestIdentifiedSet,
-    HonestMonotonicityDirection, HonestOriginalConfidenceSet, HonestRelativeMagnitudeBound,
-    RelativeMagnitudeConfidenceSetConfig, RelativeMagnitudeHybrid, SmoothnessConfidenceSetConfig,
-    SmoothnessHybrid,
+    HonestBiasDirection, HonestConditionalConfidenceSet, HonestEventStudyInput,
+    HonestIdentifiedSet, HonestMonotonicityDirection, HonestOriginalConfidenceSet,
+    HonestRelativeMagnitudeBound, RelativeMagnitudeConfidenceSetConfig, RelativeMagnitudeHybrid,
+    SmoothnessConfidenceSetConfig, SmoothnessHybrid,
 };
+use rayon::prelude::*;
+
 use crate::inference::validate_confidence_level;
 use crate::types::InferenceConfig;
 
@@ -396,6 +399,8 @@ pub fn summarize_smoothness_sensitivity(
 /// Summarize relative-magnitude sensitivity intervals over an `Mbar` grid for
 /// one post-treatment functional.
 ///
+/// One functional of [`summarize_relative_magnitude_sensitivity_many`].
+///
 /// # Errors
 /// Returns an error if the event-study input is invalid, the wrapper options
 /// are inconsistent, or any underlying identified-set / confidence-set solve
@@ -411,7 +416,48 @@ pub fn summarize_relative_magnitude_sensitivity(
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
 ) -> Result<SensitivitySummary, String> {
-    validate_api_inputs(input, post_weights, inference)?;
+    let mut summaries = summarize_relative_magnitude_sensitivity_many(
+        input,
+        inference,
+        &[post_weights],
+        method,
+        mbar_values,
+        bound,
+        bias_direction,
+        monotonicity_direction,
+    )?;
+    Ok(summaries.remove(0))
+}
+
+/// Summarize relative-magnitude sensitivity intervals over an `Mbar` grid for
+/// several post-treatment functionals of one event study, in the order given.
+///
+/// The functionals share everything that does not depend on the weights: at
+/// each `Mbar`, every branch's constraint matrix, its ARP covariance, and the
+/// thousand simulation draws behind its least-favorable critical value. Those
+/// draws were the tenth of the surface's CPU that twenty functionals spent
+/// making the same numbers twenty times. Made once here and handed to each
+/// functional, they give the same critical values. The functionals themselves
+/// run in parallel.
+///
+/// # Errors
+/// Returns an error if the event-study input is invalid for any functional,
+/// the wrapper options are inconsistent, or any underlying identified-set /
+/// confidence-set solve fails.
+#[allow(clippy::too_many_arguments)]
+pub fn summarize_relative_magnitude_sensitivity_many(
+    input: &HonestEventStudyInput,
+    inference: InferenceConfig,
+    functionals: &[&[f64]],
+    method: Option<SensitivitySummaryMethod>,
+    mbar_values: Option<&[f64]>,
+    bound: Option<HonestRelativeMagnitudeBound>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+) -> Result<Vec<SensitivitySummary>, String> {
+    for post_weights in functionals {
+        validate_api_inputs(input, post_weights, inference)?;
+    }
     let bound = bound.unwrap_or(HonestRelativeMagnitudeBound::ParallelTrendsDeviation);
     let variant = RelativeMagnitudeApiVariant::from_wrapper_options(
         bound,
@@ -446,53 +492,82 @@ pub fn summarize_relative_magnitude_sensitivity(
     };
     config.validate(inference)?;
     let family = variant.family();
-    // Neither of these depends on `Mbar`, so neither belongs inside the loop.
-    let original = compute_original_confidence_set(input, post_weights, inference)?;
-    let rows = mbar_values
-        .into_iter()
-        .map(|mbar| {
-            if !mbar.is_finite() || mbar < 0.0 {
-                return Err(format!(
-                    "relative-magnitude sensitivity requires finite non-negative Mbar, got {mbar}"
-                ));
-            }
-            // Solved once and threaded through. The confidence set is built
-            // around the identified set, so computing it here and handing it on
-            // is not an optimisation of the wrapper so much as the removal of a
-            // second solve of the same LPs one call further down.
-            let identified =
-                compute_relative_magnitude_family_identified_set(input, post_weights, mbar, family)?;
-            let conditional = compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
-                input,
-                post_weights,
-                mbar,
-                inference,
-                config,
-                &original,
-                &identified,
-                family,
-            )
-            .or_else(|err| {
-                if identified.lb.is_finite() && identified.ub.is_finite() {
-                    Err(err)
-                } else {
-                    Ok(HonestConditionalConfidenceSet {
-                        lb: identified.lb,
-                        ub: identified.ub,
-                    })
-                }
-            })?;
-            Ok(collect_interval(
-                &conditional,
-                method,
-                delta,
-                "Mbar",
-                mbar,
-                Some(identified),
-            ))
-        })
+    // None of these depends on `Mbar`, so none belongs inside the loop.
+    let originals = functionals
+        .iter()
+        .map(|post_weights| compute_original_confidence_set(input, post_weights, inference))
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(SensitivitySummary { rows })
+    let mut rows: Vec<Vec<SensitivitySummaryRow>> = functionals
+        .iter()
+        .map(|_| Vec::with_capacity(mbar_values.len()))
+        .collect();
+    for mbar in mbar_values {
+        if !mbar.is_finite() || mbar < 0.0 {
+            return Err(format!(
+                "relative-magnitude sensitivity requires finite non-negative Mbar, got {mbar}"
+            ));
+        }
+        let shared_draws = match config.hybrid {
+            RelativeMagnitudeHybrid::LeastFavorable => Some(
+                prepare_relative_magnitude_family_draws(input, mbar, family)?,
+            ),
+            RelativeMagnitudeHybrid::ArpOnly => None,
+        };
+        let at_this_mbar = functionals
+            .par_iter()
+            .zip(originals.par_iter())
+            .map(|(post_weights, original)| {
+                // Solved once and threaded through. The confidence set is built
+                // around the identified set, so computing it here and handing
+                // it on is not an optimisation of the wrapper so much as the
+                // removal of a second solve of the same LPs one call further
+                // down.
+                let identified = compute_relative_magnitude_family_identified_set(
+                    input,
+                    post_weights,
+                    mbar,
+                    family,
+                )?;
+                let conditional =
+                    compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
+                        input,
+                        post_weights,
+                        mbar,
+                        inference,
+                        config,
+                        original,
+                        &identified,
+                        family,
+                        shared_draws.as_deref(),
+                    )
+                    .or_else(|err| {
+                        if identified.lb.is_finite() && identified.ub.is_finite() {
+                            Err(err)
+                        } else {
+                            Ok(HonestConditionalConfidenceSet {
+                                lb: identified.lb,
+                                ub: identified.ub,
+                            })
+                        }
+                    })?;
+                Ok(collect_interval(
+                    &conditional,
+                    method,
+                    delta,
+                    "Mbar",
+                    mbar,
+                    Some(identified),
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        for (target, row) in rows.iter_mut().zip(at_this_mbar) {
+            target.push(row);
+        }
+    }
+    Ok(rows
+        .into_iter()
+        .map(|rows| SensitivitySummary { rows })
+        .collect())
 }
 
 /// Summarize sensitivity results for a named post-treatment period by

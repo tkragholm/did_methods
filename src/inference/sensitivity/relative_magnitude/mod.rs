@@ -33,6 +33,7 @@ use crate::inference::sensitivity::smoothness;
 use conditional_confidence_set::{
     RelativeMagnitudeConditionalBranch,
     compute_relative_magnitude_branch_accepted_range_for_matrix,
+    prepare_relative_magnitude_branch_draws,
     solve_relative_magnitude_branch_with_matrix,
 };
 use geometry::prepare_relative_magnitude_functional_transform;
@@ -456,6 +457,7 @@ fn compute_relative_magnitude_confidence_set_with_builder<F>(
     min_s: isize,
     build_matrix: F,
     empty_message: &'static str,
+    shared_draws: Option<&[Vec<f64>]>,
 ) -> Result<HonestConditionalConfidenceSet, String>
 where
     F: Fn(isize, bool) -> Result<Vec<Vec<f64>>, String> + Sync,
@@ -475,9 +477,19 @@ where
                 .map(move |max_positive| (s, max_positive))
         })
         .collect();
+    if let Some(shared_draws) = shared_draws
+        && shared_draws.len() != branches.len()
+    {
+        return Err(format!(
+            "shared least-favorable draws cover {} branches but the family has {}",
+            shared_draws.len(),
+            branches.len()
+        ));
+    }
     let branch_acceptance: Result<Vec<Option<AcceptedGridRange>>, String> = branches
         .into_par_iter()
-        .map(|(s, max_positive)| {
+        .enumerate()
+        .map(|(branch_idx, (s, max_positive))| {
             let inequality_matrix = build_matrix(s, max_positive)?;
             let branch_problem = RelativeMagnitudeConditionalBranch {
                 input,
@@ -492,6 +504,7 @@ where
             compute_relative_magnitude_branch_accepted_range_for_matrix(
                 &branch_problem,
                 &inequality_matrix,
+                shared_draws.map(|draws| draws[branch_idx].as_slice()),
             )
         })
         .collect();
@@ -596,6 +609,7 @@ fn compute_relative_magnitude_family_conditional_cs_with_config(
         &original,
         &identified,
         family,
+        None,
     )
 }
 
@@ -609,6 +623,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_family_condi
     original: &HonestOriginalConfidenceSet,
     identified: &HonestIdentifiedSet,
     family: RelativeMagnitudeFamily,
+    shared_draws: Option<&[Vec<f64>]>,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     let num_pre = input.num_pre_periods();
     let num_post = input.num_post_periods();
@@ -624,7 +639,44 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_family_condi
             family.build_constraint_matrix(num_pre, num_post, mbar, s, max_positive)
         },
         family.empty_message(),
+        shared_draws,
     )
+}
+
+/// The least-favorable simulation draws of every branch of `family` at `mbar`,
+/// in the branch order the confidence set walks.
+///
+/// The draws depend on a branch's ARP covariance and nothing else, so every
+/// functional bounded at this `mbar` uses the same ones. Made once here and
+/// handed to each functional's confidence set, they cost a twentieth of what
+/// twenty functionals making their own did, for the same critical values.
+///
+/// # Errors
+/// Returns an error if a branch's constraint matrix cannot be built or its ARP
+/// covariance is not positive definite.
+pub(in crate::inference::sensitivity) fn prepare_relative_magnitude_family_draws(
+    input: &HonestEventStudyInput,
+    mbar: f64,
+    family: RelativeMagnitudeFamily,
+) -> Result<Vec<Vec<f64>>, String> {
+    let num_pre = input.num_pre_periods();
+    let num_post = input.num_post_periods();
+    let min_s = family.min_s(num_pre)?;
+    let branches: Vec<(isize, bool)> = (min_s..=0)
+        .flat_map(|s| {
+            [true, false]
+                .into_iter()
+                .map(move |max_positive| (s, max_positive))
+        })
+        .collect();
+    branches
+        .into_par_iter()
+        .map(|(s, max_positive)| {
+            let inequality_matrix =
+                family.build_constraint_matrix(num_pre, num_post, mbar, s, max_positive)?;
+            prepare_relative_magnitude_branch_draws(input, num_pre, &inequality_matrix)
+        })
+        .collect()
 }
 
 /// Compute the exact `\Delta^{RM}(\bar M)` identified set for a post-period
@@ -721,6 +773,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
         original,
         identified,
         RelativeMagnitudeFamily::Base,
+        None,
     )
 }
 

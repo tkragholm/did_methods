@@ -105,7 +105,8 @@ pub use inference::sensitivity::{
     render_honest_directional_report_json, render_honest_joint_path_report_csv,
     render_honest_joint_path_report_json, render_honest_multi_flci_report_csv,
     render_honest_multi_flci_report_json, summarize_post_period_sensitivity,
-    summarize_relative_magnitude_sensitivity, summarize_smoothness_sensitivity,
+    summarize_relative_magnitude_sensitivity, summarize_relative_magnitude_sensitivity_many,
+    summarize_smoothness_sensitivity,
 };
 pub use methods::drdid::panel::estimate_drdid_panel;
 pub use methods::drdid::repeated::estimate_drdid_repeated_cross_section;
