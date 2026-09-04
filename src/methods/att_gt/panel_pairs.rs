@@ -238,6 +238,25 @@ fn collect_cell_units<'a>(
 
 /// Estimate one `(g, t)` cell and return the estimate plus a unit-aligned
 /// influence vector of length `unit_count`.
+/// The estimator's own word for why a cell's fit failed, one static label per
+/// error kind, so a caller counting skipped cells can tell a non-finite
+/// outcome from a singular design without parsing prose. `panel_fit` on its
+/// own was the label for all of them, and on a run that lost 315 of 325 cells
+/// it said nothing about which.
+fn panel_fit_reason(error: crate::types::DrDidError) -> &'static str {
+    use crate::types::DrDidError as E;
+    match error {
+        E::EmptyInput => "panel_fit:empty",
+        E::NoTreated => "panel_fit:no_treated",
+        E::NoControl => "panel_fit:no_control",
+        E::InvalidWeight { .. } => "panel_fit:invalid_weight",
+        E::InvalidOutcome { .. } => "panel_fit:invalid_outcome",
+        E::InvalidCovariate { .. } => "panel_fit:invalid_covariate",
+        E::SingularSystem => "panel_fit:singular",
+        _ => "panel_fit:other",
+    }
+}
+
 fn estimate_panel_cell(
     scratch: &mut CellScratch<'_>,
     unit_count: usize,
@@ -305,7 +324,7 @@ fn estimate_panel_cell(
         },
         config.drdid,
     )
-    .map_err(|_| "panel_fit")?;
+    .map_err(panel_fit_reason)?;
     if fit.influence_function.len() != scratch.units.len() {
         return Err("influence_length");
     }
