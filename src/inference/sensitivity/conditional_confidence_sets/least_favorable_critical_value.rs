@@ -21,7 +21,7 @@ use rayon::prelude::*;
 use super::super::linear_algebra::{
     cholesky_lower, draw_standard_normal_vec_into, lower_mat_vec_mul_into, simulation_draw_seed,
 };
-use super::conditional_moment_lp_workspace::ConditionalMomentLpWorkspace;
+use super::ConditionalMomentLpWorkspace;
 use crate::util::usize_to_f64;
 
 /// Draw count above which the simulation splits across rayon.

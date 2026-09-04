@@ -9,15 +9,22 @@ use clarabel::algebra::CscMatrix;
 use clarabel::solver::{
     DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
 };
+#[cfg(not(feature = "dense-lp"))]
 use highs::{ColProblem, HighsModelStatus, Model, Sense};
+#[cfg(not(feature = "dense-lp"))]
 use highs_sys::{HighsInt, STATUS_ERROR, STATUS_OK, STATUS_WARNING};
+#[cfg(not(feature = "dense-lp"))]
 use serde::Serialize;
+#[cfg(not(feature = "dense-lp"))]
 use tracing::warn;
 
 use super::super::linear_algebra::{
     build_clarabel_matrix, dot, matrix_rank, solve_square_linear_system_transposed,
     truncated_normal_quantile,
 };
+
+#[cfg(feature = "dense-lp")]
+pub(in crate::inference::sensitivity) use super::dense_workspaces::DualMaxLpWorkspace;
 
 const DUAL_FEASIBILITY_TOL: f64 = 1e-6;
 const DUAL_BOUNDARY_TOL: f64 = 1e-4;
@@ -373,6 +380,7 @@ fn check_dual_solution(
     Ok((c - optimum).abs() <= tol)
 }
 
+#[cfg(not(feature = "dense-lp"))]
 pub(in crate::inference::sensitivity) struct DualMaxLpWorkspace<'a> {
     model: Option<Model>,
     column_indices: Vec<HighsInt>,
@@ -388,6 +396,7 @@ pub(in crate::inference::sensitivity) struct DualMaxLpWorkspace<'a> {
     has_basis: bool,
 }
 
+#[cfg(not(feature = "dense-lp"))]
 impl<'a> DualMaxLpWorkspace<'a> {
     pub(in crate::inference::sensitivity) fn new(w_t: &'a [Vec<f64>]) -> Result<Self, String> {
         let dim = w_t.len();
@@ -540,6 +549,7 @@ impl<'a> DualMaxLpWorkspace<'a> {
     }
 }
 
+#[cfg(not(feature = "dense-lp"))]
 #[derive(Serialize)]
 struct HighsDualLpDiagnostic {
     model_status: String,
@@ -553,6 +563,7 @@ struct HighsDualLpDiagnostic {
     equality_matrix: Vec<Vec<f64>>,
 }
 
+#[cfg(not(feature = "dense-lp"))]
 fn build_highs_dual_diagnostic(
     status: HighsModelStatus,
     w_t: &[Vec<f64>],
@@ -583,6 +594,7 @@ fn build_highs_dual_diagnostic(
     }
 }
 
+#[cfg(not(feature = "dense-lp"))]
 fn highs_dual_solution_is_usable(
     status: HighsModelStatus,
     diagnostic: &HighsDualLpDiagnostic,
@@ -593,7 +605,10 @@ fn highs_dual_solution_is_usable(
         && diagnostic.min_column_value >= -1e-8
 }
 
-fn solve_dual_max_with_clarabel_fallback(w_t: &[Vec<f64>], f: &[f64]) -> Result<f64, String> {
+pub(super) fn solve_dual_max_with_clarabel_fallback(
+    w_t: &[Vec<f64>],
+    f: &[f64],
+) -> Result<f64, String> {
     let dim = w_t.len();
     let width = w_t.first().map_or(0, Vec::len);
     let inequalities: Vec<Vec<f64>> = (0..dim)
@@ -638,6 +653,7 @@ fn solve_dual_max_with_clarabel_fallback(w_t: &[Vec<f64>], f: &[f64]) -> Result<
     }
 }
 
+#[cfg(not(feature = "dense-lp"))]
 fn update_column_costs(
     model: &mut Model,
     column_indices: &[HighsInt],
@@ -658,6 +674,7 @@ fn update_column_costs(
     try_highs_status(status, "update HonestDiD dual max LP objective")
 }
 
+#[cfg(not(feature = "dense-lp"))]
 fn set_basis(
     model: &mut Model,
     column_basis_status: &[HighsInt],
@@ -673,6 +690,7 @@ fn set_basis(
     try_highs_status(status, "apply HonestDiD dual max LP basis")
 }
 
+#[cfg(not(feature = "dense-lp"))]
 fn populate_basis_buffers(
     model: &mut Model,
     column_basis_status: &mut [HighsInt],
@@ -688,6 +706,7 @@ fn populate_basis_buffers(
     try_highs_status(status, "read HonestDiD dual max LP basis")
 }
 
+#[cfg(not(feature = "dense-lp"))]
 fn try_highs_status(status: HighsInt, context: &str) -> Result<(), String> {
     match status {
         STATUS_OK | STATUS_WARNING => Ok(()),
@@ -698,7 +717,7 @@ fn try_highs_status(status: HighsInt, context: &str) -> Result<(), String> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "dense-lp")))]
 mod tests {
     use clarabel::algebra::CscMatrix;
     use clarabel::solver::{

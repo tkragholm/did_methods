@@ -17,6 +17,10 @@ default = []
 honest = ["dep:clarabel", "dep:highs", "dep:highs-sys"]
 # The parity suite covers the honest surface as well, so it implies the feature.
 parity-tests = ["honest"]
+# The two ARP LP workspaces on the crate's own dense simplex instead of HiGHS.
+# Same answers on the fixtures; no C++ in the build and no per-solve solver
+# object. HiGHS stays the reference until this has run a production surface.
+dense-lp = ["honest"]
 hotpath = ["dep:hotpath", "hotpath/hotpath"]
 hotpath-alloc = ["hotpath", "hotpath/hotpath-alloc"]
 
