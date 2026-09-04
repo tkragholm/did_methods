@@ -21,14 +21,34 @@ use highs_sys::{HighsInt, STATUS_ERROR, STATUS_OK, STATUS_WARNING};
 
 use super::super::linear_algebra::diag_sqrt;
 
+/// Bounds for a free column.
+///
+/// Spelled out rather than written `..` because `add_column` is generic over
+/// `Into<f64>` for the bound type and `RangeFull` leaves it unconstrained.
+const FREE: std::ops::Range<f64> = f64::NEG_INFINITY..f64::INFINITY;
+
 /// Reusable workspace for the ARP auxiliary LP.
 ///
-/// The primal variables are
-/// `(\eta^+, \eta^-, \delta^+, \delta^-)`,
-/// where `\eta = \eta^+ - \eta^-` and `\delta = \delta^+ - \delta^-`.
-/// Solving this program yields the ARP statistic `\eta^*`, the nuisance
-/// regression coefficients `\delta^*`, and—when available—the nonnegative dual
-/// multipliers used in the conditional acceptance test.
+/// The primal variables are `(\eta, \delta)`, both FREE. Solving this program
+/// yields the ARP statistic `\eta^*`, the nuisance regression coefficients
+/// `\delta^*`, and—when available—the nonnegative dual multipliers used in the
+/// conditional acceptance test.
+///
+/// They were split into nonnegative pairs `(\eta^+, \eta^-, \delta^+,
+/// \delta^-)` until 4 September 2026, which is an lpSolveAPI idiom inherited
+/// from the R package: lpSolveAPI defaults a variable to `>= 0` and needs the
+/// split to express a free one, and HiGHS does not — an unbounded `RangeBounds`
+/// gives a genuinely free column.
+///
+/// The split was not merely redundant. Adding `t` to both halves of a pair
+/// leaves every row activity unchanged (the coefficients are `-c/scale` and
+/// `+c/scale`) and the objective unchanged (the costs are `+1` and `-1`), so
+/// every optimum sat on an unbounded optimal face and HiGHS could return any
+/// point on it. The basis this workspace reads back and re-seeds is what makes
+/// the thousand-draw least-favorable simulation affordable, and a basis that
+/// wanders across a degenerate face is not a warm start. Measured on Study I's
+/// shape: 71.0 ms per least-favorable critical value split, 28.6 ms free, for
+/// the same answers to the last bit.
 pub(in crate::inference::sensitivity) struct ConditionalMomentLpWorkspace {
     model: Option<Model>,
     k: usize,
@@ -69,7 +89,7 @@ impl ConditionalMomentLpWorkspace {
         let sd_vec = diag_sqrt(sigma);
         let scale = sd_vec.iter().copied().fold(0.0_f64, f64::max).max(1.0);
         let k = x_matrix.first().map_or(0, Vec::len);
-        let num_vars = 2 + 2 * k;
+        let num_vars = 1 + k;
 
         let mut problem = ColProblem::new();
         let mut rows = Vec::with_capacity(x_matrix.len());
@@ -82,36 +102,20 @@ impl ConditionalMomentLpWorkspace {
             })
             .collect::<Result<Vec<HighsInt>, String>>()?;
 
-        let eta_plus_factors = sd_vec
+        let eta_factors = sd_vec
             .iter()
             .enumerate()
             .map(|(row_idx, sd)| (rows[row_idx], -*sd / scale))
             .collect::<Vec<_>>();
-        problem.add_column(1.0, 0.0.., eta_plus_factors);
-
-        let eta_minus_factors = sd_vec
-            .iter()
-            .enumerate()
-            .map(|(row_idx, sd)| (rows[row_idx], *sd / scale))
-            .collect::<Vec<_>>();
-        problem.add_column(-1.0, 0.0.., eta_minus_factors);
+        problem.add_column(1.0, FREE, eta_factors);
 
         for col_idx in 0..k {
-            let delta_plus_factors = x_matrix
+            let delta_factors = x_matrix
                 .iter()
                 .enumerate()
                 .map(|(row_idx, row)| (rows[row_idx], -row[col_idx] / scale))
                 .collect::<Vec<_>>();
-            problem.add_column(0.0, 0.0.., delta_plus_factors);
-        }
-
-        for col_idx in 0..k {
-            let delta_minus_factors = x_matrix
-                .iter()
-                .enumerate()
-                .map(|(row_idx, row)| (rows[row_idx], row[col_idx] / scale))
-                .collect::<Vec<_>>();
-            problem.add_column(0.0, 0.0.., delta_minus_factors);
+            problem.add_column(0.0, FREE, delta_factors);
         }
 
         let mut model = problem.optimise(Sense::Minimise);
@@ -207,11 +211,10 @@ impl ConditionalMomentLpWorkspace {
         self.has_solution = true;
         self.has_basis = true;
 
-        self.eta_star = self.column_values[0] - self.column_values[1];
+        self.eta_star = self.column_values[0];
         self.delta_star.clear();
-        self.delta_star.extend((0..self.k).map(|col_idx| {
-            self.column_values[2 + col_idx] - self.column_values[2 + self.k + col_idx]
-        }));
+        self.delta_star
+            .extend((0..self.k).map(|col_idx| self.column_values[1 + col_idx]));
 
         let inv_scale = 1.0 / self.scale;
         self.lambda.clear();
@@ -222,6 +225,63 @@ impl ConditionalMomentLpWorkspace {
         );
 
         Ok(())
+    }
+
+    /// Solve for `eta*` alone, reading it off the objective.
+    ///
+    /// The cost vector is `+1` on `eta` and zero on every nuisance column, so
+    /// the LP's objective value IS `eta*`. A caller that wants only the
+    /// statistic -- the least-favorable simulation, and the convex anchor
+    /// search in the `DeltaRM` inversion -- pays neither for the four solution
+    /// buffers nor for reconstructing `delta*` and the row duals.
+    ///
+    /// No basis is read back or re-seeded here. HiGHS keeps its own basis
+    /// across `Highs_run` when only bounds change, and measured on Study I's
+    /// shape the explicit round trip cost more than it returned once the
+    /// columns were free.
+    ///
+    /// # Errors
+    /// Returns an error if the rhs length is wrong, the model is unavailable,
+    /// or HiGHS does not reach an optimal status.
+    pub(in crate::inference::sensitivity) fn solve_eta_only(
+        &mut self,
+        y_vec: &[f64],
+    ) -> Result<f64, String> {
+        if self.rhs_scratch.len() != y_vec.len() {
+            return Err(format!(
+                "HonestDiD eta/delta LP rhs length mismatch: expected {}, got {}",
+                self.rhs_scratch.len(),
+                y_vec.len()
+            ));
+        }
+        for (dst, y) in self.rhs_scratch.iter_mut().zip(y_vec.iter()) {
+            *dst = -y / self.scale;
+        }
+        let model = self
+            .model
+            .as_mut()
+            .ok_or_else(|| "HonestDiD eta/delta LP model is unavailable".to_string())?;
+        update_row_upper_bounds(
+            model,
+            &self.row_indices,
+            &self.row_lower_bounds,
+            &self.rhs_scratch,
+        )?;
+        let model = self
+            .model
+            .as_mut()
+            .ok_or_else(|| "HonestDiD eta/delta LP model is unavailable".to_string())?;
+        match solve_highs_model(model)? {
+            HighsModelStatus::Optimal
+            | HighsModelStatus::ObjectiveBound
+            | HighsModelStatus::ObjectiveTarget => {}
+            status => {
+                return Err(format!(
+                    "failed to solve HonestDiD eta/delta LP: {status:?}"
+                ));
+            }
+        }
+        Ok(unsafe { highs_sys::Highs_getObjectiveValue(model.as_mut_ptr()) })
     }
 
     pub(in crate::inference::sensitivity) const fn eta_star(&self) -> f64 {

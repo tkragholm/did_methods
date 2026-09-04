@@ -373,18 +373,23 @@ fn check_dual_solution(
     Ok((c - optimum).abs() <= tol)
 }
 
-pub(in crate::inference::sensitivity) struct DualMaxLpWorkspace {
+pub(in crate::inference::sensitivity) struct DualMaxLpWorkspace<'a> {
     model: Option<Model>,
     column_indices: Vec<HighsInt>,
-    w_t: Vec<Vec<f64>>,
+    /// Borrowed, not owned. It is read only when HiGHS returns something other
+    /// than an optimal status -- to build the diagnostic and to hand the
+    /// Clarabel fallback its equalities -- and one workspace is built per
+    /// branch per functional per `Mbar`, so cloning the dense matrix into each
+    /// of them was a per-branch allocation for a path that almost never runs.
+    w_t: &'a [Vec<f64>],
     f_scratch: Vec<f64>,
     column_basis_status: Vec<HighsInt>,
     row_basis_status: Vec<HighsInt>,
     has_basis: bool,
 }
 
-impl DualMaxLpWorkspace {
-    pub(in crate::inference::sensitivity) fn new(w_t: &[Vec<f64>]) -> Result<Self, String> {
+impl<'a> DualMaxLpWorkspace<'a> {
+    pub(in crate::inference::sensitivity) fn new(w_t: &'a [Vec<f64>]) -> Result<Self, String> {
         let dim = w_t.len();
         let width = w_t.first().map_or(0, Vec::len);
         let mut problem = ColProblem::new();
@@ -415,7 +420,7 @@ impl DualMaxLpWorkspace {
         Ok(Self {
             model: Some(model),
             column_indices,
-            w_t: w_t.to_vec(),
+            w_t,
             f_scratch: vec![0.0; dim],
             column_basis_status: vec![0; dim],
             row_basis_status: vec![0; width],
@@ -466,8 +471,21 @@ impl DualMaxLpWorkspace {
             HighsModelStatus::Optimal
             | HighsModelStatus::ObjectiveBound
             | HighsModelStatus::ObjectiveTarget => {
-                let solution = solved.get_solution();
-                dot(solution.columns(), &self.f_scratch)
+                // The objective IS `f' x`, which is what the caller wants, and
+                // reading it costs one FFI call rather than the four freshly
+                // allocated solution vectors `get_solution` hands back on every
+                // step of the bisection above.
+                let mut reusable_model: Model = solved.into();
+                let objective =
+                    unsafe { highs_sys::Highs_getObjectiveValue(reusable_model.as_mut_ptr()) };
+                populate_basis_buffers(
+                    &mut reusable_model,
+                    &mut self.column_basis_status,
+                    &mut self.row_basis_status,
+                )?;
+                self.has_basis = true;
+                self.model = Some(reusable_model);
+                return Ok(objective);
             }
             HighsModelStatus::Infeasible | HighsModelStatus::UnboundedOrInfeasible => {
                 self.model = Some(solved.into());
@@ -477,7 +495,7 @@ impl DualMaxLpWorkspace {
                 let solution = solved.get_solution();
                 let diagnostic = build_highs_dual_diagnostic(
                     status,
-                    &self.w_t,
+                    self.w_t,
                     &self.f_scratch,
                     solution.columns(),
                     solution.rows(),
@@ -494,7 +512,7 @@ impl DualMaxLpWorkspace {
                         );
                     }
                     self.model = Some(solved.into());
-                    return solve_dual_max_with_clarabel_fallback(&self.w_t, &self.f_scratch)
+                    return solve_dual_max_with_clarabel_fallback(self.w_t, &self.f_scratch)
                         .map_err(|fallback_err| {
                             format!(
                                 "HiGHS failed to solve HonestDiD dual max LP: {status:?}; Clarabel fallback also failed: {fallback_err}"

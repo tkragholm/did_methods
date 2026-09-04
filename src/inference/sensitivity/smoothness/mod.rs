@@ -83,7 +83,7 @@ struct SmoothnessThetaEvaluator<'a> {
     lf_cv: f64,
     flci_hybrid: Option<&'a SmoothnessFlciHybridData>,
     workspace: ConditionalMomentLpWorkspace,
-    dual_workspace: DualMaxLpWorkspace,
+    dual_workspace: DualMaxLpWorkspace<'a>,
     shifted_y_arp: Vec<f64>,
     shifted_y_full: Vec<f64>,
     gamma_full_scratch: Vec<f64>,

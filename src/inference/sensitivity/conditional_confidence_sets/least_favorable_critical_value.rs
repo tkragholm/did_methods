@@ -15,10 +15,8 @@
 //! - Andrews, I., Roth, J., and Pakes, A. (2022). "Inference for Linear
 //!   Conditional Moment Inequalities". *Econometrica* 90(5), 2345-2377.
 
-use once_map::OnceMap;
 use rand::{SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
-use std::sync::LazyLock;
 
 use super::super::linear_algebra::{
     cholesky_lower, draw_standard_normal_vec_into, lower_mat_vec_mul_into, simulation_draw_seed,
@@ -26,25 +24,38 @@ use super::super::linear_algebra::{
 use super::conditional_moment_lp_workspace::ConditionalMomentLpWorkspace;
 use crate::util::usize_to_f64;
 
-const LEAST_FAVORABLE_CV_PARALLEL_MIN_DRAWS: usize = 2_048;
+/// Draw count above which the simulation splits across rayon.
+///
+/// Every call site asks for 1,000 draws, so this used to be unreachable: the
+/// gate was 2,048 and the parallel arm was dead code. It is 512 now, which the
+/// production call does cross. Nested inside an outer parallel loop over
+/// functionals this buys little — rayon's pool is already saturated and the
+/// work is merely re-divided — but a caller assessing ONE functional had every
+/// core but one idle for the whole simulation, and that is the shape a test and
+/// the tail of a fan-out both have.
+const LEAST_FAVORABLE_CV_PARALLEL_MIN_DRAWS: usize = 512;
 const LEAST_FAVORABLE_CV_PARALLEL_MIN_DIM: usize = 16;
 
-static LEAST_FAVORABLE_CV_CACHE: LazyLock<OnceMap<LeastFavorableCvCacheKey, Result<f64, String>>> =
-    LazyLock::new(OnceMap::new);
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct LeastFavorableCvCacheKey {
-    x_rows: usize,
-    x_cols: usize,
-    sigma_rows: usize,
-    sigma_cols: usize,
-    hybrid_kappa_bits: u64,
-    sims: usize,
-    seed: u64,
-    x_bits: Box<[u64]>,
-    sigma_bits: Box<[u64]>,
-}
-
+/// Compute the least-favorable critical value for an ARP design.
+///
+/// There is no memo. A process-wide `OnceMap` keyed on the bit patterns of
+/// `x_matrix` and `sigma` sat here until 4 September 2026 and nothing evicted
+/// from it. It could not: every analysis slice carries its own covariance, so a
+/// key is only ever reachable again inside the slice that made it. Measured on
+/// Study I's shape it answered 140 of 1,440 calls — 9.7% — and retained 15.3 MB
+/// per slice-anchor for good. Resident memory grew 16 MB per slice and stayed
+/// grown (157 MB after eight, against a flat 30 MB with the memo off), and the
+/// production stage runs 108 slices at two anchors in one process.
+///
+/// The 9.7% is real and is now paid. It is the cheaper side of the trade: the
+/// key was two boxed bit-vectors built and hashed on every call including the
+/// 90% that missed, and the free-column rewrite in
+/// [`ConditionalMomentLpWorkspace`] took 2.5x off this simulation, which is
+/// more than the memo ever returned.
+///
+/// # Errors
+/// Returns an error if the covariance is not positive definite or too many
+/// draws fail to solve.
 #[cfg_attr(feature = "hotpath", hotpath::measure)]
 pub(in crate::inference::sensitivity) fn compute_least_favorable_cv(
     x_matrix: &[Vec<f64>],
@@ -53,10 +64,7 @@ pub(in crate::inference::sensitivity) fn compute_least_favorable_cv(
     sims: usize,
     seed: u64,
 ) -> Result<f64, String> {
-    let cache_key = build_cache_key(x_matrix, sigma, hybrid_kappa, sims, seed);
-    LEAST_FAVORABLE_CV_CACHE.insert_cloned(cache_key, |_| {
-        compute_least_favorable_cv_uncached(x_matrix, sigma, hybrid_kappa, sims, seed)
-    })
+    compute_least_favorable_cv_uncached(x_matrix, sigma, hybrid_kappa, sims, seed)
 }
 
 pub(in crate::inference::sensitivity) fn compute_least_favorable_cv_uncached(
@@ -94,11 +102,7 @@ pub(in crate::inference::sensitivity) fn compute_least_favorable_cv_uncached(
                     y.iter_mut().zip(xi.iter()).for_each(|(y_value, xi_value)| {
                         *y_value = -*xi_value;
                     });
-                    if workspace.solve_in_place(y).is_err() {
-                        Ok(None)
-                    } else {
-                        Ok(Some(workspace.eta_star()))
-                    }
+                    Ok(workspace.solve_eta_only(y).ok())
                 },
             )
             .collect::<Result<Vec<_>, String>>()?
@@ -115,11 +119,7 @@ pub(in crate::inference::sensitivity) fn compute_least_favorable_cv_uncached(
             y.iter_mut().zip(xi.iter()).for_each(|(y_value, xi_value)| {
                 *y_value = -*xi_value;
             });
-            if workspace.solve_in_place(&y).is_err() {
-                draws.push(None);
-            } else {
-                draws.push(Some(workspace.eta_star()));
-            }
+            draws.push(workspace.solve_eta_only(&y).ok());
         }
         draws
     };
@@ -142,40 +142,4 @@ pub(in crate::inference::sensitivity) fn compute_least_favorable_cv_uncached(
     etas.get(idx)
         .copied()
         .ok_or_else(|| "failed to compute least-favorable critical value".to_string())
-}
-
-fn build_cache_key(
-    x_matrix: &[Vec<f64>],
-    sigma: &[Vec<f64>],
-    hybrid_kappa: f64,
-    sims: usize,
-    seed: u64,
-) -> LeastFavorableCvCacheKey {
-    LeastFavorableCvCacheKey {
-        x_rows: x_matrix.len(),
-        x_cols: x_matrix.first().map_or(0, Vec::len),
-        sigma_rows: sigma.len(),
-        sigma_cols: sigma.first().map_or(0, Vec::len),
-        hybrid_kappa_bits: normalized_f64_bits(hybrid_kappa),
-        sims,
-        seed,
-        x_bits: flatten_matrix_bits(x_matrix),
-        sigma_bits: flatten_matrix_bits(sigma),
-    }
-}
-
-fn flatten_matrix_bits(matrix: &[Vec<f64>]) -> Box<[u64]> {
-    matrix
-        .iter()
-        .flat_map(|row| row.iter().copied().map(normalized_f64_bits))
-        .collect::<Vec<_>>()
-        .into_boxed_slice()
-}
-
-fn normalized_f64_bits(value: f64) -> u64 {
-    if value == 0.0 {
-        0.0f64.to_bits()
-    } else {
-        value.to_bits()
-    }
 }

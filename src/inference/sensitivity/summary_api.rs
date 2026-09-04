@@ -2,13 +2,9 @@ use statrs::distribution::{ContinuousCDF, Normal};
 
 use super::linear_algebra::{diag_sqrt, linear_grid, mat_vec_mul_into, sandwich_covariance};
 use super::relative_magnitude::{
-    compute_linear_trend_relative_magnitude_confidence_set_with_config,
-    compute_monotone_linear_trend_relative_magnitude_confidence_set_with_config,
-    compute_monotone_relative_magnitude_confidence_set_with_config,
-    compute_original_confidence_set, compute_relative_magnitude_confidence_set_with_config,
-    compute_relative_magnitude_identified_set,
-    compute_signed_linear_trend_relative_magnitude_confidence_set_with_config,
-    compute_signed_relative_magnitude_confidence_set_with_config, geometry::basis_post_weights,
+    RelativeMagnitudeFamily, compute_original_confidence_set,
+    compute_relative_magnitude_family_conditional_cs_with_precomputed_sets,
+    compute_relative_magnitude_family_identified_set, geometry::basis_post_weights,
 };
 use super::smoothness::least_favorable_intervals::{
     SmoothnessFlciConfig, build_smoothness_flci_problem, compute_smoothness_flci_with_config,
@@ -19,7 +15,7 @@ use super::smoothness::{
     compute_smoothness_confidence_set_with_config,
 };
 use super::{
-    HonestBiasDirection, HonestConditionalConfidenceSet, HonestEventStudyInput,
+    HonestBiasDirection, HonestConditionalConfidenceSet, HonestEventStudyInput, HonestIdentifiedSet,
     HonestMonotonicityDirection, HonestOriginalConfidenceSet, HonestRelativeMagnitudeBound,
     RelativeMagnitudeConfidenceSetConfig, RelativeMagnitudeHybrid, SmoothnessConfidenceSetConfig,
     SmoothnessHybrid,
@@ -55,6 +51,20 @@ pub struct SensitivitySummaryRow {
     pub delta: &'static str,
     pub sensitivity_name: &'static str,
     pub sensitivity_value: f64,
+    /// The identified set this row's interval was built around, where the
+    /// restriction family has a closed form for one.
+    ///
+    /// It is on the row because the caller would otherwise ask for it again.
+    /// Constructing the confidence set requires the identified set -- it is what
+    /// the inversion grid is centred on -- so it has already been solved by the
+    /// time the row exists, and a consumer that wants to report "a loss of up to
+    /// this much remains consistent with the data" beside the interval was
+    /// re-running eight branch LPs to learn something this function had just
+    /// thrown away. Study I's bridge did exactly that, which made three
+    /// identified-set solves per row where one was needed.
+    ///
+    /// `None` on the smoothness path, which does not compute one here.
+    pub identified: Option<HonestIdentifiedSet>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -248,115 +258,15 @@ impl RelativeMagnitudeApiVariant {
         }
     }
 
-    fn compute_identified_set(
-        self,
-        input: &HonestEventStudyInput,
-        post_weights: &[f64],
-        mbar: f64,
-    ) -> Result<super::HonestIdentifiedSet, String> {
+    /// The internal family this wrapper variant names.
+    const fn family(self) -> RelativeMagnitudeFamily {
         match self {
-            Self::Base => compute_relative_magnitude_identified_set(input, post_weights, mbar),
-            Self::SignedBase(direction) => super::compute_signed_relative_magnitude_identified_set(
-                input,
-                post_weights,
-                mbar,
-                direction,
-            ),
-            Self::MonotoneBase(direction) => {
-                super::compute_monotone_relative_magnitude_identified_set(
-                    input,
-                    post_weights,
-                    mbar,
-                    direction,
-                )
-            }
-            Self::Linear => super::compute_linear_trend_relative_magnitude_identified_set(
-                input,
-                post_weights,
-                mbar,
-            ),
-            Self::SignedLinear(direction) => {
-                super::compute_signed_linear_trend_relative_magnitude_identified_set(
-                    input,
-                    post_weights,
-                    mbar,
-                    direction,
-                )
-            }
-            Self::MonotoneLinear(direction) => {
-                super::compute_monotone_linear_trend_relative_magnitude_identified_set(
-                    input,
-                    post_weights,
-                    mbar,
-                    direction,
-                )
-            }
-        }
-    }
-
-    fn compute_conditional_cs(
-        self,
-        input: &HonestEventStudyInput,
-        post_weights: &[f64],
-        mbar: f64,
-        inference: InferenceConfig,
-        config: RelativeMagnitudeConfidenceSetConfig,
-    ) -> Result<HonestConditionalConfidenceSet, String> {
-        match self {
-            Self::Base => compute_relative_magnitude_confidence_set_with_config(
-                input,
-                post_weights,
-                mbar,
-                inference,
-                config,
-            ),
-            Self::SignedBase(direction) => {
-                compute_signed_relative_magnitude_confidence_set_with_config(
-                    input,
-                    post_weights,
-                    mbar,
-                    direction,
-                    inference,
-                    config,
-                )
-            }
-            Self::MonotoneBase(direction) => {
-                compute_monotone_relative_magnitude_confidence_set_with_config(
-                    input,
-                    post_weights,
-                    mbar,
-                    direction,
-                    inference,
-                    config,
-                )
-            }
-            Self::Linear => compute_linear_trend_relative_magnitude_confidence_set_with_config(
-                input,
-                post_weights,
-                mbar,
-                inference,
-                config,
-            ),
-            Self::SignedLinear(direction) => {
-                compute_signed_linear_trend_relative_magnitude_confidence_set_with_config(
-                    input,
-                    post_weights,
-                    mbar,
-                    direction,
-                    inference,
-                    config,
-                )
-            }
-            Self::MonotoneLinear(direction) => {
-                compute_monotone_linear_trend_relative_magnitude_confidence_set_with_config(
-                    input,
-                    post_weights,
-                    mbar,
-                    direction,
-                    inference,
-                    config,
-                )
-            }
+            Self::Base => RelativeMagnitudeFamily::Base,
+            Self::SignedBase(direction) => RelativeMagnitudeFamily::SignedBase(direction),
+            Self::MonotoneBase(direction) => RelativeMagnitudeFamily::MonotoneBase(direction),
+            Self::Linear => RelativeMagnitudeFamily::Linear,
+            Self::SignedLinear(direction) => RelativeMagnitudeFamily::SignedLinear(direction),
+            Self::MonotoneLinear(direction) => RelativeMagnitudeFamily::MonotoneLinear(direction),
         }
     }
 }
@@ -367,6 +277,7 @@ const fn collect_interval(
     delta: &'static str,
     sensitivity_name: &'static str,
     sensitivity_value: f64,
+    identified: Option<HonestIdentifiedSet>,
 ) -> SensitivitySummaryRow {
     SensitivitySummaryRow {
         lb: conditional.lb,
@@ -375,6 +286,7 @@ const fn collect_interval(
         delta,
         sensitivity_name,
         sensitivity_value,
+        identified,
     }
 }
 
@@ -424,6 +336,7 @@ pub fn summarize_smoothness_sensitivity(
                         delta,
                         sensitivity_name: "M",
                         sensitivity_value: m,
+                        identified: None,
                     }
                 }
                 SensitivitySummaryMethod::Conditional
@@ -471,7 +384,7 @@ pub fn summarize_smoothness_sensitivity(
                         }
                         (Some(_), Some(_)) => unreachable!("validated above"),
                     };
-                    collect_interval(&conditional, method, delta, "M", m)
+                    collect_interval(&conditional, method, delta, "M", m, None)
                 }
             };
             Ok(row)
@@ -519,6 +432,22 @@ pub fn summarize_relative_magnitude_sensitivity(
     let mbar_values = mbar_values.map_or_else(default_relative_magnitude_mbar_values, |values| {
         values.to_vec()
     });
+    let config = RelativeMagnitudeConfidenceSetConfig {
+        hybrid: match method {
+            SensitivitySummaryMethod::Conditional => RelativeMagnitudeHybrid::ArpOnly,
+            SensitivitySummaryMethod::ConditionalLeastFavorable => {
+                RelativeMagnitudeHybrid::LeastFavorable
+            }
+            SensitivitySummaryMethod::Flci | SensitivitySummaryMethod::ConditionalFlci => {
+                unreachable!()
+            }
+        },
+        ..RelativeMagnitudeConfidenceSetConfig::from_inference(inference)
+    };
+    config.validate(inference)?;
+    let family = variant.family();
+    // Neither of these depends on `Mbar`, so neither belongs inside the loop.
+    let original = compute_original_confidence_set(input, post_weights, inference)?;
     let rows = mbar_values
         .into_iter()
         .map(|mbar| {
@@ -527,32 +456,40 @@ pub fn summarize_relative_magnitude_sensitivity(
                     "relative-magnitude sensitivity requires finite non-negative Mbar, got {mbar}"
                 ));
             }
-            let config = RelativeMagnitudeConfidenceSetConfig {
-                hybrid: match method {
-                    SensitivitySummaryMethod::Conditional => RelativeMagnitudeHybrid::ArpOnly,
-                    SensitivitySummaryMethod::ConditionalLeastFavorable => {
-                        RelativeMagnitudeHybrid::LeastFavorable
-                    }
-                    SensitivitySummaryMethod::Flci | SensitivitySummaryMethod::ConditionalFlci => {
-                        unreachable!()
-                    }
-                },
-                ..RelativeMagnitudeConfidenceSetConfig::from_inference(inference)
-            };
-            let identified = variant.compute_identified_set(input, post_weights, mbar)?;
-            let conditional = variant
-                .compute_conditional_cs(input, post_weights, mbar, inference, config)
-                .or_else(|err| {
-                    if !identified.lb.is_finite() || !identified.ub.is_finite() {
-                        Ok(HonestConditionalConfidenceSet {
-                            lb: identified.lb,
-                            ub: identified.ub,
-                        })
-                    } else {
-                        Err(err)
-                    }
-                })?;
-            Ok(collect_interval(&conditional, method, delta, "Mbar", mbar))
+            // Solved once and threaded through. The confidence set is built
+            // around the identified set, so computing it here and handing it on
+            // is not an optimisation of the wrapper so much as the removal of a
+            // second solve of the same LPs one call further down.
+            let identified =
+                compute_relative_magnitude_family_identified_set(input, post_weights, mbar, family)?;
+            let conditional = compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
+                input,
+                post_weights,
+                mbar,
+                inference,
+                config,
+                &original,
+                &identified,
+                family,
+            )
+            .or_else(|err| {
+                if identified.lb.is_finite() && identified.ub.is_finite() {
+                    Err(err)
+                } else {
+                    Ok(HonestConditionalConfidenceSet {
+                        lb: identified.lb,
+                        ub: identified.ub,
+                    })
+                }
+            })?;
+            Ok(collect_interval(
+                &conditional,
+                method,
+                delta,
+                "Mbar",
+                mbar,
+                Some(identified),
+            ))
         })
         .collect::<Result<Vec<_>, String>>()?;
     Ok(SensitivitySummary { rows })

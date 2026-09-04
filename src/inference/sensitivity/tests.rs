@@ -7,6 +7,7 @@ use super::relative_magnitude::geometry::{
 use super::relative_magnitude::{
     compute_original_confidence_set, compute_relative_magnitude_identified_set,
     conditional_confidence_set::{
+        compute_relative_magnitude_branch_identified_sets_with_prepared_branches,
         compute_relative_magnitude_confidence_set_with_prepared_branches,
         compute_relative_magnitude_confidence_set_with_prepared_functional_branches,
         compute_relative_magnitude_confidence_set_with_prepared_functional_branches_full_grid,
@@ -1377,4 +1378,105 @@ fn relative_magnitude_adaptive_grid_matches_full_grid_interval() {
         .expect("full-grid conditional confidence set");
 
     assert_same_interval((adaptive.lb, adaptive.ub), (full_grid.lb, full_grid.ub));
+}
+
+/// An event study shaped like Study I's: a short pre-period, a long post-period,
+/// and income-scale coefficients whose horizons are strongly correlated because
+/// they share families.
+fn study_shaped_input() -> HonestEventStudyInput {
+    let betahat = vec![
+        -83.27, 6.82, 105.78, 79.47, 227.29, 195.36, -212.48, -449.14, -685.27, -853.38,
+    ];
+    let se = [
+        90.25, 84.31, 75.91, 60.43, 61.5, 74.55, 82.48, 90.93, 97.42, 102.79,
+    ];
+    let dim = betahat.len();
+    let covariance = (0..dim)
+        .map(|i| {
+            (0..dim)
+                .map(|j| {
+                    let lag = f64::from(u32::try_from(i.abs_diff(j)).expect("lag fits"));
+                    se[i] * se[j] * 0.5f64.mul_add(0.85f64.powf(lag), 0.5)
+                })
+                .collect()
+        })
+        .collect();
+    HonestEventStudyInput {
+        betahat,
+        covariance,
+        pre_periods: vec![-4, -3, -2, -1],
+        post_periods: vec![0, 1, 2, 3, 4, 5],
+    }
+}
+
+#[test]
+fn most_relative_magnitude_branches_are_infeasible_at_the_observed_pre_trend() {
+    // The precondition the next test rests on, asserted rather than assumed.
+    // The identified-set LP fixes `delta_pre = betahat_pre`, and the branch
+    // index names which pre-period attains the largest violation, so at one
+    // realised pre-trend only one branch can be feasible.
+    let input = study_shaped_input();
+    let branches = prepare_relative_magnitude_branches(
+        input.num_pre_periods(),
+        input.num_post_periods(),
+        1.0,
+    )
+    .expect("prepared branches");
+    let mut post_weights = vec![0.0; input.num_post_periods()];
+    post_weights[0] = 1.0;
+    let sets = compute_relative_magnitude_branch_identified_sets_with_prepared_branches(
+        &input,
+        &post_weights,
+        &branches,
+    )
+    .expect("branch identified sets");
+
+    assert_eq!(sets.len(), 8);
+    assert_eq!(sets.iter().filter(|set| set.is_some()).count(), 1);
+}
+
+#[test]
+fn the_prepared_basis_period_path_agrees_with_the_matrix_path() {
+    // Two implementations of one object. The prepared path prepares the branch
+    // geometry once and walks the branches in order; the matrix path rebuilds
+    // each branch's constraint matrix and solves them in parallel. They must
+    // return the same confidence set.
+    //
+    // The prepared path SKIPPED any branch whose identified set was infeasible
+    // until 4 September 2026, and by the test above that is seven branches of
+    // eight here. Skipping them conditions the confidence set on the realised
+    // pre-trend, which the method exists to avoid, and returns intervals that
+    // are too narrow. `branch_anchor_idx` carries the argument.
+    let input = study_shaped_input();
+    let inference = InferenceConfig::new(0.95);
+    let mbar = 1.0;
+
+    let prepared = compute_honest_event_study_scalar_for_input(
+        &input,
+        HonestSensitivity::RelativeMagnitude(mbar),
+        inference,
+    )
+    .expect("prepared basis-period path");
+    assert_eq!(prepared.len(), input.num_post_periods());
+
+    for (post_idx, point) in prepared.iter().enumerate() {
+        let mut post_weights = vec![0.0; input.num_post_periods()];
+        post_weights[post_idx] = 1.0;
+        let matrix = summarize_relative_magnitude_sensitivity(
+            &input,
+            inference,
+            &post_weights,
+            None,
+            Some(&[mbar]),
+            None,
+            None,
+            None,
+        )
+        .expect("matrix path");
+        assert_eq!(matrix.rows.len(), 1);
+        assert_same_interval(
+            point.result.robust_ci,
+            (matrix.rows[0].lb, matrix.rows[0].ub),
+        );
+    }
 }

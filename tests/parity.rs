@@ -1687,6 +1687,21 @@ fn honest_post_functional_multi_flci_wrapper_matches_direct_problem_path() {
     }
 }
 
+/// How far a simultaneous-region bound may sit from R's.
+///
+/// The residual is grid resolution: R's fixtures were generated over 10,000
+/// points spanning +/-40 standard errors, and this crate inverts over 1,000
+/// spanning the identified set +/-20, so the two land on different lattices.
+/// Measured, the largest gap across the joint-path fixture is 0.0029.
+///
+/// It was `1e-2`, which was not a tolerance so much as an absence of one: the
+/// rest of this file asserts at `5e-3`, and `1e-2` was wide enough to hide a
+/// real defect. The prepared confidence-set path used to skip any branch whose
+/// identified set was infeasible, and it moved the period-0 upper bound by
+/// 0.0046 -- comfortably inside `1e-2`, and caught here at `4e-3`. See
+/// `branch_anchor_idx`.
+const HONEST_REGION_TOLERANCE: f64 = 4e-3;
+
 #[test]
 fn honest_joint_path_region_bonferroni_matches_r_fixture() {
     let input_data = fs::read_to_string("tests/honest_did_ref.json").expect("read input ref");
@@ -1732,8 +1747,8 @@ fn honest_joint_path_region_bonferroni_matches_r_fixture() {
     assert_eq!(rust.points.len(), fixture.points.len());
     for (rust_point, fixture_point) in rust.points.iter().zip(fixture.points.iter()) {
         assert_eq!(rust_point.post_period, fixture_point.post_period);
-        assert!((rust_point.assessment.robust_ci.0 - fixture_point.lb).abs() < 1e-2);
-        assert!((rust_point.assessment.robust_ci.1 - fixture_point.ub).abs() < 1e-2);
+        assert!((rust_point.assessment.robust_ci.0 - fixture_point.lb).abs() < HONEST_REGION_TOLERANCE);
+        assert!((rust_point.assessment.robust_ci.1 - fixture_point.ub).abs() < HONEST_REGION_TOLERANCE);
     }
 }
 
@@ -1793,8 +1808,8 @@ fn honest_directional_region_bonferroni_matches_r_fixture() {
         .zip(fixture.directions.iter())
     {
         assert_eq!(fixture_point.name, fixture_direction.name);
-        assert!((rust_point.assessment.robust_ci.0 - fixture_point.lb).abs() < 1e-2);
-        assert!((rust_point.assessment.robust_ci.1 - fixture_point.ub).abs() < 1e-2);
+        assert!((rust_point.assessment.robust_ci.0 - fixture_point.lb).abs() < HONEST_REGION_TOLERANCE);
+        assert!((rust_point.assessment.robust_ci.1 - fixture_point.ub).abs() < HONEST_REGION_TOLERANCE);
     }
 }
 

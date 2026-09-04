@@ -52,7 +52,7 @@ pub(in crate::inference::sensitivity) fn grid_bounds_around_identified_set(
 }
 
 #[derive(Debug, Clone, Copy)]
-enum RelativeMagnitudeFamily {
+pub(in crate::inference::sensitivity) enum RelativeMagnitudeFamily {
     Base,
     SignedBase(HonestBiasDirection),
     MonotoneBase(HonestMonotonicityDirection),
@@ -554,7 +554,7 @@ pub fn compute_original_confidence_set(
     })
 }
 
-fn compute_relative_magnitude_family_identified_set(
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_family_identified_set(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
     mbar: f64,
@@ -600,7 +600,7 @@ fn compute_relative_magnitude_family_conditional_cs_with_config(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
     mbar: f64,
