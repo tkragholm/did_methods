@@ -39,7 +39,7 @@ use std::collections::BTreeMap;
 
 use crate::methods::drdid::panel::{PanelFlatInput, estimate_drdid_panel_flat};
 use crate::types::{
-    AttGtDrConfig, AttGtDrObservation, AttGtError, AttGtEstimate, AttGtInfluenceOutput,
+    AttGtDrConfig, AttGtDrObservation, AttGtError, AttGtEstimate, AttGtInfluenceOutput, SkippedCell,
 };
 
 /// One unit's contribution to a single `(g, t)` cell.
@@ -366,6 +366,7 @@ pub fn estimate_att_gt_dr_panel_with_influence(
 
     let mut estimates = Vec::new();
     let mut influence_functions = Vec::new();
+    let mut skipped = Vec::new();
     // Allocated once for the whole grid, not once per cell. See `CellScratch`.
     let mut scratch = CellScratch::new(unit_count);
 
@@ -399,6 +400,12 @@ pub fn estimate_att_gt_dr_panel_with_influence(
                 }
                 Err(cell) => {
                     if config.att_gt.skip_incomplete_pairs {
+                        skipped.push(SkippedCell {
+                            group,
+                            time,
+                            baseline_time,
+                            reason: cell,
+                        });
                         continue;
                     }
                     return Err(AttGtError::MissingCell {
@@ -418,6 +425,7 @@ pub fn estimate_att_gt_dr_panel_with_influence(
     Ok(AttGtInfluenceOutput {
         estimates,
         influence_functions,
+        skipped,
     })
 }
 
@@ -466,4 +474,77 @@ pub fn unit_panel(
         // that structure, so it cannot be inferred here.
         clusters: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{AttGtConfig, DrDidConfig};
+
+    fn observation(unit: i64, group: Option<i32>, time: i32, outcome: f64) -> AttGtDrObservation {
+        AttGtDrObservation {
+            unit_id: Some(unit),
+            first_treated_time: group,
+            time,
+            outcome,
+            weight: 1.0,
+            covariates: Vec::new(),
+        }
+    }
+
+    /// Eight units treated at period 2 and eight never treated, over periods
+    /// 1 to 3, with the treated units unobserved at period 3. The cell
+    /// `(g = 2, t = 3)` then has no treated units and cannot be fitted. Nor
+    /// can the pre-period cell `(2, 1)`: under the varying base period its
+    /// baseline is period 0, which the panel does not have. Both are
+    /// reported, neither is an error, and the one fittable cell is fitted.
+    #[test]
+    fn a_cell_with_no_treated_units_is_reported_rather_than_dropped() {
+        let mut observations = Vec::new();
+        for unit in 0..16_i64 {
+            let group = (unit < 8).then_some(2);
+            for time in 1..=3 {
+                if group.is_some() && time == 3 {
+                    continue;
+                }
+                let effect = if group.is_some() && time >= 2 {
+                    5.0
+                } else {
+                    0.0
+                };
+                let outcome = 10.0 + f64::from(time) + (unit % 4) as f64 * 0.5 + effect;
+                observations.push(observation(unit, group, time, outcome));
+            }
+        }
+        let config = AttGtDrConfig {
+            att_gt: AttGtConfig::default(),
+            drdid: DrDidConfig {
+                bootstrap_reps: 1,
+                ..DrDidConfig::default()
+            },
+        };
+        assert!(config.att_gt.skip_incomplete_pairs);
+
+        let fitted = estimate_att_gt_dr_panel_with_influence(&observations, config).unwrap();
+        let fitted_cells: Vec<(i32, i32)> =
+            fitted.estimates.iter().map(|e| (e.group, e.time)).collect();
+        assert_eq!(fitted_cells, vec![(2, 2)]);
+        assert_eq!(
+            fitted.skipped,
+            vec![
+                SkippedCell {
+                    group: 2,
+                    time: 1,
+                    baseline_time: 0,
+                    reason: "treated_panel",
+                },
+                SkippedCell {
+                    group: 2,
+                    time: 3,
+                    baseline_time: 1,
+                    reason: "treated_panel",
+                },
+            ]
+        );
+    }
 }

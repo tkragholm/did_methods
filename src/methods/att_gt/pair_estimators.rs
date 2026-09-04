@@ -15,8 +15,8 @@ use crate::methods::drdid::moments::{
 use crate::methods::drdid::repeated::estimate_drdid_repeated_cross_section;
 use crate::types::{
     AttGtConfig, AttGtDrConfig, AttGtDrObservation, AttGtError, AttGtEstimate,
-    AttGtInfluenceOutput, BasePeriod, DidCell, DrDidConfig, DrDidRepeatedObservation, TimePeriod,
-    TreatmentGroup,
+    AttGtInfluenceOutput, BasePeriod, DidCell, DrDidConfig, DrDidRepeatedObservation, SkippedCell,
+    TimePeriod, TreatmentGroup,
 };
 use crate::util::usize_to_f64;
 
@@ -173,6 +173,7 @@ where
     let (all_times, treated_groups) = prepare_att_gt_dr_inputs(observations, config)?;
     let mut estimates = Vec::new();
     let mut influence_functions = Vec::new();
+    let mut skipped = Vec::new();
     let full_n = observations.len();
     let mut pair_rows = Vec::new();
     let mut pair_indices = Vec::new();
@@ -197,6 +198,12 @@ where
             );
             if let Some(cell) = missing_pair_cell(&pair_rows) {
                 if config.att_gt.skip_incomplete_pairs {
+                    skipped.push(SkippedCell {
+                        group,
+                        time,
+                        baseline_time,
+                        reason: cell,
+                    });
                     continue;
                 }
                 return Err(AttGtError::MissingCell {
@@ -248,6 +255,7 @@ where
     Ok(AttGtInfluenceOutput {
         estimates,
         influence_functions,
+        skipped,
     })
 }
 

@@ -617,12 +617,37 @@ pub struct AttGtEstimate {
     pub total_weight: f64,
 }
 
+/// An ATT(g,t) cell the estimator could not fit and left out, which it does
+/// when [`AttGtConfig::skip_incomplete_pairs`] is set.
+///
+/// `reason` is the estimator's own word for it: `treated_panel` or
+/// `control_panel` when the cell has no units on one side, `covariate_count`
+/// when a unit's covariates do not match the cell's, `panel_fit` when the
+/// doubly-robust fit did not converge, `influence_length` when it returned the
+/// wrong shape. On the repeated-cross-section route the reasons are the
+/// missing-pair kinds of that route.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SkippedCell {
+    pub group: i32,
+    pub time: i32,
+    pub baseline_time: i32,
+    pub reason: &'static str,
+}
+
 /// ATT(g,t) estimates with aligned influence-function vectors.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttGtInfluenceOutput {
     pub estimates: Vec<AttGtEstimate>,
     /// Influence vectors aligned to the full input sample index.
     pub influence_functions: Vec<Vec<f64>>,
+    /// The cells that were attempted and could not be fitted. Empty when
+    /// every cell fitted, and always empty when `skip_incomplete_pairs` is
+    /// off, because then the first failure is an error instead.
+    ///
+    /// A caller that aggregates `estimates` into a curve should read this
+    /// first: a curve over ten cells of a possible three hundred is not a
+    /// curve, and until this existed nothing said how many had been dropped.
+    pub skipped: Vec<SkippedCell>,
 }
 
 /// Event-time aggregated ATT estimates with aligned influence-function vectors.
