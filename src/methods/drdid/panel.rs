@@ -2,6 +2,7 @@ use faer::Mat;
 use faer::prelude::SolveLstsq;
 use itertools::izip;
 
+use super::design::prune_design;
 use crate::estimators::common::linalg::{
     SpdCholeskyScratch, solve_spd_system, solve_spd_system_multi_rhs,
 };
@@ -137,6 +138,7 @@ fn estimate_from_prepared(
         control_n: prepared.control_n,
         total_weight: prepared.total_weight,
         influence_function: panel_att.influence_function,
+        design_columns_dropped: prepared.design_columns_dropped,
     })
 }
 
@@ -190,20 +192,38 @@ fn prepare_panel_flat(input: PanelFlatInput<'_>) -> Result<PanelPreparedData, Dr
         return Err(DrDidError::NoControl);
     }
 
-    Ok(PanelPreparedData {
+    let design = prune_design(
+        input.design_matrix_flat,
         feature_count,
+        &arms(&treated_indicator),
+        input.weight,
+    );
+    Ok(PanelPreparedData {
+        feature_count: design.feature_count,
         treated_n,
         control_n,
         total_weight,
         treated_indicator,
         outcome_delta: input.delta_outcome.to_vec(),
         sampling_weights: input.weight.to_vec(),
-        design_matrix_flat: input.design_matrix_flat.to_vec(),
+        design_matrix_flat: design.design_flat,
+        design_columns_dropped: design.dropped,
     })
 }
 
+/// Row groups for [`prune_design`]: the comparison arm is 0, the treated arm 1.
+fn arms(treated_indicator: &[f64]) -> Vec<usize> {
+    treated_indicator
+        .iter()
+        .map(|&treated| usize::from(treated > 0.5))
+        .collect()
+}
+
 struct PanelPreparedData {
+    /// Columns of `design_matrix_flat` per row, AFTER pruning: the intercept
+    /// plus the covariates this sample can identify. See [`prune_design`].
     feature_count: usize,
+    design_columns_dropped: usize,
     treated_n: usize,
     control_n: usize,
     total_weight: f64,
@@ -285,15 +305,22 @@ fn prepare_panel_data(observations: &[DrDidObservation]) -> Result<PanelPrepared
         return Err(DrDidError::NoControl);
     }
 
-    Ok(PanelPreparedData {
+    let design = prune_design(
+        &design_matrix_flat,
         feature_count,
+        &arms(&treated_indicator),
+        &sampling_weights,
+    );
+    Ok(PanelPreparedData {
+        feature_count: design.feature_count,
         treated_n,
         control_n,
         total_weight,
         treated_indicator,
         outcome_delta,
         sampling_weights,
-        design_matrix_flat,
+        design_matrix_flat: design.design_flat,
+        design_columns_dropped: design.dropped,
     })
 }
 

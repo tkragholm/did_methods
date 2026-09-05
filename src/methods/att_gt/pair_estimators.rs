@@ -15,8 +15,8 @@ use crate::methods::drdid::moments::{
 use crate::methods::drdid::repeated::estimate_drdid_repeated_cross_section;
 use crate::types::{
     AttGtConfig, AttGtDrConfig, AttGtDrObservation, AttGtError, AttGtEstimate,
-    AttGtInfluenceOutput, BasePeriod, DidCell, DrDidConfig, DrDidRepeatedObservation, SkippedCell,
-    TimePeriod, TreatmentGroup,
+    AttGtInfluenceOutput, BasePeriod, DidCell, DrDidConfig, DrDidRepeatedObservation, PrunedCell,
+    SkippedCell, TimePeriod, TreatmentGroup,
 };
 use crate::util::usize_to_f64;
 
@@ -24,6 +24,9 @@ use crate::util::usize_to_f64;
 pub struct PairEstimateWithInfluence {
     pub estimate: AttGtEstimate,
     pub influence_function: Vec<f64>,
+    /// Covariate columns the pair's own sample could not identify; see
+    /// [`DrDidEstimate::design_columns_dropped`](crate::types::DrDidEstimate).
+    pub design_columns_dropped: usize,
 }
 
 pub fn estimate_att_gt_dr_with_influence(
@@ -51,6 +54,7 @@ pub fn estimate_att_gt_dr_with_influence(
                     total_weight: dr.total_weight,
                 },
                 influence_function: dr.influence_function,
+                design_columns_dropped: dr.design_columns_dropped,
             })
         },
     )
@@ -123,6 +127,7 @@ pub fn estimate_att_gt_dr_efficient_with_influence(
                     total_weight: dr.total_weight,
                 },
                 influence_function: dr.influence_function,
+                design_columns_dropped: dr.design_columns_dropped,
             })
         },
     )
@@ -174,6 +179,7 @@ where
     let mut estimates = Vec::new();
     let mut influence_functions = Vec::new();
     let mut skipped = Vec::new();
+    let mut pruned = Vec::new();
     let full_n = observations.len();
     let mut pair_rows = Vec::new();
     let mut pair_indices = Vec::new();
@@ -244,6 +250,14 @@ where
             for (local_idx, global_idx) in pair_indices.iter().enumerate() {
                 aligned[*global_idx] = pair.influence_function[local_idx] * scale;
             }
+            if pair.design_columns_dropped > 0 {
+                pruned.push(PrunedCell {
+                    group,
+                    time,
+                    baseline_time,
+                    columns_dropped: pair.design_columns_dropped,
+                });
+            }
             estimates.push(pair.estimate);
             influence_functions.push(aligned);
         }
@@ -256,6 +270,7 @@ where
         estimates,
         influence_functions,
         skipped,
+        pruned,
     })
 }
 
@@ -560,6 +575,7 @@ pub fn estimate_pair_or(
             total_weight: rows.iter().map(|row| row.weight).sum::<f64>(),
         },
         influence_function,
+        design_columns_dropped: 0,
     })
 }
 
@@ -813,5 +829,6 @@ pub fn estimate_pair_ipw(
             total_weight: rows.iter().map(|row| row.weight).sum::<f64>(),
         },
         influence_function: moments.influence_function,
+        design_columns_dropped: 0,
     })
 }

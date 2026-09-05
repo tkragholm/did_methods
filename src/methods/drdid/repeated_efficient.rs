@@ -451,5 +451,6 @@ pub fn estimate_drdid_repeated_efficient(
         control_n: prepared.control_n,
         total_weight: prepared.total_weight,
         influence_function,
+        design_columns_dropped: prepared.design_columns_dropped,
     })
 }

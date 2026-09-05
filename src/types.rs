@@ -403,6 +403,12 @@ pub struct DrDidEstimate {
     pub control_n: usize,
     pub total_weight: f64,
     pub influence_function: Vec<f64>,
+    /// Covariate columns this fit could not identify on its own rows and
+    /// dropped before fitting: constant within an arm, or a combination of
+    /// the columns before them. Zero on a full-rank design. The estimate is
+    /// the one the remaining columns give, which is what R's `did` would
+    /// give on that formula where it returns `NA` on the full one.
+    pub design_columns_dropped: usize,
 }
 
 /// Configuration for `DiD_CC` estimators and the stationarity Hausman test.
@@ -634,6 +640,16 @@ pub struct SkippedCell {
     pub reason: &'static str,
 }
 
+/// An ATT(g,t) cell fitted on fewer covariates than it was given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PrunedCell {
+    pub group: i32,
+    pub time: i32,
+    pub baseline_time: i32,
+    /// How many covariate columns the cell's own sample could not identify.
+    pub columns_dropped: usize,
+}
+
 /// ATT(g,t) estimates with aligned influence-function vectors.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttGtInfluenceOutput {
@@ -648,6 +664,13 @@ pub struct AttGtInfluenceOutput {
     /// first: a curve over ten cells of a possible three hundred is not a
     /// curve, and until this existed nothing said how many had been dropped.
     pub skipped: Vec<SkippedCell>,
+    /// The cells fitted on a design pruned to what their own sample could
+    /// identify, with how many columns each lost. A cell's sample is the units
+    /// observed at both of its periods, and a covariate that varies across the
+    /// input can be constant, or a combination of the others, inside it. Such a
+    /// cell was skipped as singular until the pruning existed, and on an
+    /// unbalanced panel with one rare indicator that was most of them.
+    pub pruned: Vec<PrunedCell>,
 }
 
 /// Event-time aggregated ATT estimates with aligned influence-function vectors.

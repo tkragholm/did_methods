@@ -79,6 +79,8 @@ pub fn estimate_drdid_improved_repeated_cross_section(
         control_n: prepared.control_n,
         total_weight: prepared.total_weight,
         influence_function: estimate.influence_function,
+        // This path prunes nothing of its own; its design is the caller's.
+        design_columns_dropped: 0,
     })
 }
 

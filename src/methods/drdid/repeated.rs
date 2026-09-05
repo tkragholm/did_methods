@@ -1,6 +1,7 @@
 use faer::Mat;
 use itertools::izip;
 
+use super::design::prune_design;
 use crate::estimators::outcome::linear::LinearOutcome;
 use crate::estimators::outcome::model::OutcomeModel;
 use crate::estimators::propensity::common::logistic_scores;
@@ -86,11 +87,15 @@ pub fn estimate_drdid_repeated_cross_section(
         control_n: prepared.control_n,
         total_weight: prepared.total_weight,
         influence_function,
+        design_columns_dropped: prepared.design_columns_dropped,
     })
 }
 
 pub(super) struct RepeatedPreparedData {
+    /// Columns per row AFTER pruning to what every (arm, period) cell can
+    /// identify. See [`super::design::prune_design`].
     pub(super) feature_count: usize,
+    pub(super) design_columns_dropped: usize,
     pub(super) treated_n: usize,
     pub(super) control_n: usize,
     pub(super) total_weight: f64,
@@ -201,8 +206,21 @@ pub(super) fn prepare(
         });
     }
 
-    Ok(RepeatedPreparedData {
+    // One group per (arm, period) cell: the outcome regressions run within
+    // the comparison arm's periods, so a column has to be identified in each.
+    let cells: Vec<usize> = treated_indicator
+        .iter()
+        .zip(&post_indicator)
+        .map(|(&treated, &post)| 2 * usize::from(treated > 0.5) + usize::from(post > 0.5))
+        .collect();
+    let design = prune_design(
+        &design_matrix_flat,
         feature_count,
+        &cells,
+        &sampling_weights,
+    );
+    Ok(RepeatedPreparedData {
+        feature_count: design.feature_count,
         treated_n,
         control_n,
         total_weight,
@@ -210,7 +228,8 @@ pub(super) fn prepare(
         post_indicator,
         outcome,
         sampling_weights,
-        design_matrix_flat,
+        design_matrix_flat: design.design_flat,
+        design_columns_dropped: design.dropped,
     })
 }
 

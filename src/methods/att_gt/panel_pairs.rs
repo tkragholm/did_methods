@@ -39,7 +39,8 @@ use std::collections::BTreeMap;
 
 use crate::methods::drdid::panel::{PanelFlatInput, estimate_drdid_panel_flat};
 use crate::types::{
-    AttGtDrConfig, AttGtDrObservation, AttGtError, AttGtEstimate, AttGtInfluenceOutput, SkippedCell,
+    AttGtDrConfig, AttGtDrObservation, AttGtError, AttGtEstimate, AttGtInfluenceOutput, PrunedCell,
+    SkippedCell,
 };
 
 /// One unit's contribution to a single `(g, t)` cell.
@@ -263,7 +264,7 @@ fn estimate_panel_cell(
     group: i32,
     time: i32,
     config: AttGtDrConfig,
-) -> Result<(AttGtEstimate, Vec<f64>), &'static str> {
+) -> Result<(AttGtEstimate, Vec<f64>, usize), &'static str> {
     let treated_count = scratch.units.iter().filter(|unit| unit.treated).count();
     if treated_count == 0 {
         return Err("treated_panel");
@@ -328,6 +329,11 @@ fn estimate_panel_cell(
     if fit.influence_function.len() != scratch.units.len() {
         return Err("influence_length");
     }
+    // A solve that ran to a non-finite number is a failed cell, not a row.
+    // Every aggregation sums these, and one NaN would take the curve with it.
+    if !fit.att.is_finite() || !fit.se.is_finite() {
+        return Err("non_finite");
+    }
 
     // Rescale from the cell's own sample to the full one. `estimate_drdid_panel`
     // returns psi normalised so that sqrt(sum(psi^2)) / n_cell is the standard
@@ -358,6 +364,7 @@ fn estimate_panel_cell(
             total_weight: fit.total_weight,
         },
         aligned,
+        fit.design_columns_dropped,
     ))
 }
 
@@ -386,6 +393,7 @@ pub fn estimate_att_gt_dr_panel_with_influence(
     let mut estimates = Vec::new();
     let mut influence_functions = Vec::new();
     let mut skipped = Vec::new();
+    let mut pruned = Vec::new();
     // Allocated once for the whole grid, not once per cell. See `CellScratch`.
     let mut scratch = CellScratch::new(unit_count);
 
@@ -413,7 +421,15 @@ pub fn estimate_att_gt_dr_panel_with_influence(
             )?;
 
             match estimate_panel_cell(&mut scratch, unit_count, group, time, config) {
-                Ok((estimate, influence)) => {
+                Ok((estimate, influence, columns_dropped)) => {
+                    if columns_dropped > 0 {
+                        pruned.push(PrunedCell {
+                            group,
+                            time,
+                            baseline_time,
+                            columns_dropped,
+                        });
+                    }
                     estimates.push(estimate);
                     influence_functions.push(influence);
                 }
@@ -445,6 +461,7 @@ pub fn estimate_att_gt_dr_panel_with_influence(
         estimates,
         influence_functions,
         skipped,
+        pruned,
     })
 }
 
@@ -498,7 +515,7 @@ pub fn unit_panel(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AttGtConfig, DrDidConfig};
+    use crate::types::{AttGtConfig, DrDidConfig, PrunedCell};
 
     fn observation(unit: i64, group: Option<i32>, time: i32, outcome: f64) -> AttGtDrObservation {
         AttGtDrObservation {
@@ -565,5 +582,87 @@ mod tests {
                 },
             ]
         );
+    }
+
+    /// Twenty units treated at period 2 and twenty never treated over periods
+    /// 1 to 4, one continuous covariate, and a rare indicator held by one
+    /// treated unit and one comparator, the comparator observed at periods 1
+    /// and 2 only. In cell (2, 2) the indicator varies in both arms and is
+    /// kept; in cells (2, 3) and (2, 4) no comparator holds it, the outcome
+    /// regression on the comparison arm cannot identify it, and the cell is
+    /// fitted without it. Its estimate is then the one the continuous
+    /// covariate alone gives, to the last bit, rather than a skipped cell.
+    #[test]
+    fn a_covariate_no_comparator_in_the_cell_holds_is_dropped_for_that_cell() {
+        fn panel(with_indicator: bool) -> Vec<AttGtDrObservation> {
+            let mut rows = Vec::new();
+            for unit in 0..40_i64 {
+                let group = (unit < 20).then_some(2);
+                let holder = unit == 1 || unit == 21;
+                let x = (unit % 7) as f64 * 0.3 - 1.0;
+                for time in 1..=4 {
+                    if unit == 21 && time > 2 {
+                        continue;
+                    }
+                    let effect = if group.is_some() && time >= 2 {
+                        3.0
+                    } else {
+                        0.0
+                    };
+                    let outcome =
+                        5.0 + f64::from(time) * 0.5 + 1.2 * x + (unit % 3) as f64 * 0.25 + effect;
+                    let mut covariates = vec![x];
+                    if with_indicator {
+                        covariates.push(f64::from(u8::from(holder)));
+                    }
+                    rows.push(AttGtDrObservation {
+                        unit_id: Some(unit),
+                        first_treated_time: group,
+                        time,
+                        outcome,
+                        weight: 1.0,
+                        covariates,
+                    });
+                }
+            }
+            rows
+        }
+        let config = AttGtDrConfig {
+            att_gt: AttGtConfig::default(),
+            drdid: DrDidConfig {
+                bootstrap_reps: 1,
+                ..DrDidConfig::default()
+            },
+        };
+        let full = estimate_att_gt_dr_panel_with_influence(&panel(true), config).unwrap();
+        let reduced = estimate_att_gt_dr_panel_with_influence(&panel(false), config).unwrap();
+
+        let cells: Vec<(i32, i32)> = full.estimates.iter().map(|e| (e.group, e.time)).collect();
+        assert_eq!(cells, vec![(2, 2), (2, 3), (2, 4)]);
+        assert!(full.skipped.iter().all(|cell| cell.time == 1));
+        assert_eq!(
+            full.pruned,
+            vec![
+                PrunedCell {
+                    group: 2,
+                    time: 3,
+                    baseline_time: 1,
+                    columns_dropped: 1,
+                },
+                PrunedCell {
+                    group: 2,
+                    time: 4,
+                    baseline_time: 1,
+                    columns_dropped: 1,
+                },
+            ]
+        );
+        for (with, without) in full.estimates.iter().zip(&reduced.estimates).skip(1) {
+            assert_eq!(with.att, without.att);
+            assert_eq!(with.se, without.se);
+        }
+        // The cell that kept the indicator is a different fit.
+        assert_ne!(full.estimates[0].att, reduced.estimates[0].att);
+        assert!(reduced.pruned.is_empty());
     }
 }

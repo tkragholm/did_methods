@@ -10,6 +10,7 @@
 //!   implements the improved / locally efficient panel estimator matching
 //!   `DRDID::drdid_panel`.
 
+mod design;
 pub mod improved;
 pub mod moments;
 pub mod panel;
