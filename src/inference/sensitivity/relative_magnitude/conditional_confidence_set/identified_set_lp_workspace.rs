@@ -21,6 +21,52 @@ pub(super) struct RelativeMagnitudeIdentifiedSetWorkspace {
     solver: DefaultSolver<f64>,
     base_objective: Vec<f64>,
     current_q: Vec<f64>,
+    /// What a second solver needs if the first one stops on a numerical
+    /// error: the problem, kept so the retry can rebuild rather than reuse a
+    /// factorisation that has already gone wrong.
+    problem: IdentifiedSetProblem,
+}
+
+struct IdentifiedSetProblem {
+    quadratic: CscMatrix<f64>,
+    constraint_matrix: CscMatrix<f64>,
+    rhs: Vec<f64>,
+    cones: Vec<SupportedConeT<f64>>,
+}
+
+/// The solver's own defaults, which is how every parity fixture was solved.
+fn default_settings() -> Result<clarabel::solver::DefaultSettings<f64>, String> {
+    DefaultSettingsBuilder::<f64>::default()
+        .verbose(false)
+        .presolve_enable(false)
+        .input_sparse_dropzeros(false)
+        .build()
+        .map_err(|err| format!("failed to build Clarabel settings: {err}"))
+}
+
+/// The settings for a retry after `NumericalError` or `InsufficientProgress`.
+///
+/// Those two statuses are the KKT factorisation losing accuracy, not the
+/// program being infeasible, and on this LP they turned up once on Study I's
+/// first 0.18.1 server run, on one anchor of one slice. Presolve removes the
+/// redundant rows the branch geometry carries, a larger static regularisation
+/// keeps the factorisation away from the degenerate face, and a longer
+/// iteration budget with tolerances one order looser lets an interior point
+/// method finish on a vertex it was already close to. The identified set is
+/// then reported to `1e-7` rather than `1e-8`, which is far inside the grid
+/// step anything reads it at.
+fn retry_settings() -> Result<clarabel::solver::DefaultSettings<f64>, String> {
+    DefaultSettingsBuilder::<f64>::default()
+        .verbose(false)
+        .presolve_enable(true)
+        .input_sparse_dropzeros(false)
+        .static_regularization_constant(1e-7)
+        .max_iter(500)
+        .tol_gap_abs(1e-7)
+        .tol_gap_rel(1e-7)
+        .tol_feas(1e-7)
+        .build()
+        .map_err(|err| format!("failed to build Clarabel retry settings: {err}"))
 }
 
 impl RelativeMagnitudeIdentifiedSetWorkspace {
@@ -31,25 +77,25 @@ impl RelativeMagnitudeIdentifiedSetWorkspace {
         cones: &[SupportedConeT<f64>],
         objective: &[f64],
     ) -> Result<Self, String> {
-        let settings = DefaultSettingsBuilder::<f64>::default()
-            .verbose(false)
-            .presolve_enable(false)
-            .input_sparse_dropzeros(false)
-            .build()
-            .map_err(|err| format!("failed to build Clarabel settings: {err}"))?;
         let solver = DefaultSolver::new(
             quadratic,
             objective,
             constraint_matrix,
             rhs,
             cones,
-            settings,
+            default_settings()?,
         )
         .map_err(|err| format!("failed to initialize Clarabel solver: {err}"))?;
         Ok(Self {
             solver,
             base_objective: objective.to_vec(),
             current_q: objective.to_vec(),
+            problem: IdentifiedSetProblem {
+                quadratic: quadratic.clone(),
+                constraint_matrix: constraint_matrix.clone(),
+                rhs: rhs.to_vec(),
+                cones: cones.to_vec(),
+            },
         })
     }
 
@@ -60,6 +106,25 @@ impl RelativeMagnitudeIdentifiedSetWorkspace {
             .update_q(&self.current_q)
             .map_err(|err| format!("failed to update relative-magnitude LP objective: {err}"))?;
         self.solver.solve();
+        let status = self.solver.solution.status;
+        if matches!(
+            status,
+            SolverStatus::NumericalError | SolverStatus::InsufficientProgress
+        ) {
+            // A fresh solver on the same problem, under `retry_settings`. The
+            // workspace keeps it, so a branch that needed the retry once solves
+            // its second objective the same way.
+            self.solver = DefaultSolver::new(
+                &self.problem.quadratic,
+                &self.current_q,
+                &self.problem.constraint_matrix,
+                &self.problem.rhs,
+                &self.problem.cones,
+                retry_settings()?,
+            )
+            .map_err(|err| format!("failed to initialize Clarabel retry solver: {err}"))?;
+            self.solver.solve();
+        }
         match self.solver.solution.status {
             SolverStatus::Solved | SolverStatus::AlmostSolved => Ok(Some(
                 self.base_objective
