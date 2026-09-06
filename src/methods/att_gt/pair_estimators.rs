@@ -462,6 +462,8 @@ pub fn build_pair_rows_into(
             })
         } else if super::is_control_for_pair(
             row.first_treated_time,
+            row.comparison_cohort,
+            group,
             // The LATER of the two periods being compared, not `time`. Under a
             // universal base period a pre-treatment cell has baseline > time, and
             // a unit treated in between is already treated when the baseline is

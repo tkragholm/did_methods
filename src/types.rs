@@ -572,6 +572,20 @@ impl AttGtObservation {
 pub enum ComparisonGroup {
     NeverTreated,
     NotYetTreated,
+    /// Never-treated units tagged with the cell's own cohort, and no others.
+    ///
+    /// For a risk-set matched panel, where every never-treated unit was
+    /// sampled to match a treated unit of one cohort and is observed on that
+    /// cohort's calendar. Pooling all never-treated units, as `NeverTreated`
+    /// does, compares a cohort with comparators from every other cohort's
+    /// sets at whatever point in their own follow-up the calendar year finds
+    /// them: on Study I's panel that pool is older in the life cycle than the
+    /// cohort, and the leads came out as a straight line of −570 EUR a year.
+    /// Each never-treated row says which cohort it was matched to in
+    /// [`AttGtDrObservation::comparison_cohort`], and this mode admits it as
+    /// a control for that cohort's cells only. Not-yet-treated units are never
+    /// controls here. The basic route has no cohort tag and refuses the mode.
+    MatchedNeverTreated,
 }
 
 /// Base-period convention for staggered `ATT(g,t)` estimators.
@@ -703,6 +717,11 @@ pub enum AttGtError {
     #[error("never-treated comparison group is required but missing")]
     MissingNeverTreatedGroup,
     #[error(
+        "the matched comparison group needs a comparison cohort on every never-treated \
+         row, which only the doubly robust routes carry"
+    )]
+    MatchedComparisonUnsupported,
+    #[error(
         "panel ATT(g,t) requires a unit_id on every row: a unit cannot be \
          differenced across periods unless it can be named"
     )]
@@ -757,6 +776,11 @@ pub struct AttGtDrObservation {
     pub weight: f64,
     #[builder(default)]
     pub covariates: Vec<f64>,
+    /// For a never-treated unit, the cohort it is a comparator for: the first
+    /// treated time of the treated unit it was matched to. Read only under
+    /// [`ComparisonGroup::MatchedNeverTreated`]; `None` there means the row is
+    /// a control for no cell.
+    pub comparison_cohort: Option<i32>,
 }
 
 impl AttGtDrObservation {
@@ -769,6 +793,7 @@ impl AttGtDrObservation {
             outcome,
             weight: 1.0,
             covariates: Vec::new(),
+            comparison_cohort: None,
         }
     }
 
@@ -787,6 +812,7 @@ impl AttGtDrObservation {
             outcome,
             weight: 1.0,
             covariates: Vec::new(),
+            comparison_cohort: None,
         }
     }
 }

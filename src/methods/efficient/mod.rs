@@ -1130,6 +1130,7 @@ mod tests {
                     outcome: control_outcome,
                     weight: 1.0,
                     covariates: vec![x],
+                    comparison_cohort: None,
                 });
 
                 let treated_outcome = control_outcome + if time >= 3 { 2.0 } else { 0.0 };
@@ -1140,6 +1141,7 @@ mod tests {
                     outcome: treated_outcome,
                     weight: 1.0,
                     covariates: vec![x],
+                    comparison_cohort: None,
                 });
             }
         }

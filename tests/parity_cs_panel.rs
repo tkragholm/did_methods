@@ -64,6 +64,7 @@ fn observations(rows: &[DataRow]) -> Vec<AttGtDrObservation> {
             outcome: row.lemp,
             weight: 1.0,
             covariates: vec![row.lpop],
+            comparison_cohort: None,
         })
         .collect()
 }
@@ -831,6 +832,7 @@ fn weights_flow_through_estimation_and_aggregation() {
             outcome: row.lemp,
             weight: by_unit[&row.countyreal],
             covariates: vec![row.lpop],
+            comparison_cohort: None,
         })
         .collect::<Vec<_>>();
 

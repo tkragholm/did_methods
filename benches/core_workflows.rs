@@ -90,6 +90,7 @@ fn build_att_gt_rows(num_units: usize, start_year: i32, periods: usize) -> Vec<A
                     usize_to_f64(unit_index % 7) * 0.1,
                     usize_to_f64(period_offset) * 0.05,
                 ],
+                comparison_cohort: None,
             });
         }
     }

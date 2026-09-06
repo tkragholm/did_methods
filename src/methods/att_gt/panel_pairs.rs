@@ -162,6 +162,8 @@ fn collect_cell_units<'a>(
         if !treated
             && !super::is_control_for_pair(
                 row.first_treated_time,
+                row.comparison_cohort,
+                group,
                 time.max(baseline_time),
                 config.att_gt.comparison_group,
                 config.att_gt.anticipation_periods,
@@ -515,7 +517,7 @@ pub fn unit_panel(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AttGtConfig, DrDidConfig, PrunedCell};
+    use crate::types::{AttGtConfig, ComparisonGroup, DrDidConfig, PrunedCell};
 
     fn observation(unit: i64, group: Option<i32>, time: i32, outcome: f64) -> AttGtDrObservation {
         AttGtDrObservation {
@@ -525,6 +527,7 @@ mod tests {
             outcome,
             weight: 1.0,
             covariates: Vec::new(),
+            comparison_cohort: None,
         }
     }
 
@@ -622,6 +625,7 @@ mod tests {
                         outcome,
                         weight: 1.0,
                         covariates,
+                        comparison_cohort: None,
                     });
                 }
             }
@@ -664,5 +668,98 @@ mod tests {
         // The cell that kept the indicator is a different fit.
         assert_ne!(full.estimates[0].att, reduced.estimates[0].att);
         assert!(reduced.pruned.is_empty());
+    }
+
+    /// Three matched sets, indexed at periods 3, 4 and 5, each with treated
+    /// units and their own never-treated comparators, observed from two
+    /// periods before the index to three after. Every unit in a set follows
+    /// the set's own trend, one unit of outcome per period times the index,
+    /// and the treated units gain a constant 1.0 from their index on. Within a
+    /// set the trends cancel exactly, so ATT(g,t) is 1.0 after the index and
+    /// 0 before it. Pooling every comparator into each cell mixes three trends
+    /// and reports something else, which is the 4 September 2026 Study I
+    /// reading in miniature.
+    #[test]
+    fn matched_comparators_recover_the_effect_where_the_pool_reports_the_trends() {
+        let mut rows = Vec::new();
+        let mut unit = 0_i64;
+        for index in 3..=5_i32 {
+            let slope = f64::from(index);
+            for member in 0..8 {
+                for treated in [true, false] {
+                    unit += 1;
+                    let x = f64::from(member % 3);
+                    for time in (index - 2)..=(index + 3) {
+                        let effect = if treated && time >= index { 1.0 } else { 0.0 };
+                        let outcome = 2.0 * x + slope * f64::from(time) + effect;
+                        rows.push(AttGtDrObservation {
+                            unit_id: Some(unit),
+                            first_treated_time: treated.then_some(index),
+                            time,
+                            outcome,
+                            weight: 1.0,
+                            covariates: vec![x],
+                            comparison_cohort: (!treated).then_some(index),
+                        });
+                    }
+                }
+            }
+        }
+        let config = |comparison_group| AttGtDrConfig {
+            att_gt: AttGtConfig {
+                comparison_group,
+                base_period: crate::types::BasePeriod::Universal,
+                ..AttGtConfig::default()
+            },
+            drdid: DrDidConfig {
+                bootstrap_reps: 1,
+                ..DrDidConfig::default()
+            },
+        };
+
+        let matched = estimate_att_gt_dr_panel_with_influence(
+            &rows,
+            config(ComparisonGroup::MatchedNeverTreated),
+        )
+        .unwrap();
+        // The only cells without a fit are the ones at periods a set is not
+        // observed in, and the fit never fails.
+        assert!(
+            matched
+                .skipped
+                .iter()
+                .all(|cell| cell.reason == "treated_panel"),
+            "{:?}",
+            matched.skipped
+        );
+        assert_eq!(matched.estimates.len(), 15);
+        for cell in &matched.estimates {
+            let expected = if cell.time >= cell.group { 1.0 } else { 0.0 };
+            assert!(
+                (cell.att - expected).abs() < 1e-9,
+                "cell ({}, {}) gave {}",
+                cell.group,
+                cell.time,
+                cell.att
+            );
+            // Eight comparators per cell: the set's own and nobody else's.
+            assert_eq!(cell.control_n, 8);
+        }
+
+        let pooled =
+            estimate_att_gt_dr_panel_with_influence(&rows, config(ComparisonGroup::NeverTreated))
+                .unwrap();
+        let off = pooled
+            .estimates
+            .iter()
+            .filter(|cell| {
+                let expected = if cell.time >= cell.group { 1.0 } else { 0.0 };
+                (cell.att - expected).abs() > 0.1
+            })
+            .count();
+        assert!(
+            off > 0,
+            "the pooled comparison should not recover the effect here"
+        );
     }
 }

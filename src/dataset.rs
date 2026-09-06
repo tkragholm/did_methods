@@ -502,6 +502,7 @@ impl ValidatedInferenceDataset {
                 outcome: ds.outcomes[i],
                 weight: ds.weights[i],
                 covariates: ds.covariates[i].clone(),
+                comparison_cohort: None,
             })
             .collect();
 

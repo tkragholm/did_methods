@@ -417,8 +417,16 @@ pub fn estimate_att_gt_ipw_with_influence(
     pair_estimators::estimate_att_gt_ipw_with_influence(observations, config)
 }
 
+/// Whether a row is a control for the cell of cohort `group` whose later
+/// period is `pair_time`.
+///
+/// `comparison_cohort` is the cohort a never-treated row was matched to, and
+/// is read only under [`ComparisonGroup::MatchedNeverTreated`]; the other two
+/// modes ignore it, so a caller without the tag passes `None`.
 fn is_control_for_pair(
     first_treated_time: Option<i32>,
+    comparison_cohort: Option<i32>,
+    group: i32,
     pair_time: i32,
     mode: ComparisonGroup,
     anticipation_periods: i32,
@@ -427,6 +435,9 @@ fn is_control_for_pair(
         ComparisonGroup::NeverTreated => first_treated_time.is_none(),
         ComparisonGroup::NotYetTreated => {
             first_treated_time.is_none_or(|g| g > pair_time + anticipation_periods)
+        }
+        ComparisonGroup::MatchedNeverTreated => {
+            first_treated_time.is_none() && comparison_cohort == Some(group)
         }
     }
 }

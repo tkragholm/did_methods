@@ -140,6 +140,9 @@ pub fn estimate_att_gt(
     if config.comparison_group == ComparisonGroup::NeverTreated && !scan.has_never_treated {
         return Err(AttGtError::MissingNeverTreatedGroup);
     }
+    if config.comparison_group == ComparisonGroup::MatchedNeverTreated {
+        return Err(AttGtError::MatchedComparisonUnsupported);
+    }
 
     let all_times = scan.times.into_iter().collect::<Vec<_>>();
     let mut out = Vec::new();
@@ -317,6 +320,8 @@ fn estimate_pair_panel(
             true
         } else if super::is_control_for_pair(
             row.first_treated_time,
+            None,
+            group,
             time,
             config.comparison_group,
             config.anticipation_periods,
@@ -416,6 +421,8 @@ fn compute_pair_cells(
         if row.time == baseline_time
             && super::is_control_for_pair(
                 row.first_treated_time,
+                None,
+                group,
                 time,
                 comparison_group,
                 anticipation_periods,
@@ -426,6 +433,8 @@ fn compute_pair_cells(
         if row.time == time
             && super::is_control_for_pair(
                 row.first_treated_time,
+                None,
+                group,
                 time,
                 comparison_group,
                 anticipation_periods,
