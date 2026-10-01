@@ -29,8 +29,8 @@ use super::super::adaptive_grid::{
 use super::super::conditional_confidence_sets::{
     ConditionalMomentLpWorkspace, DualMaxLpWorkspace, build_v_b_row_major_into,
     compute_least_favorable_cv, compute_least_favorable_cv_from_draws,
-    compute_least_favorable_cv_uncached, dual_conditional_test, simulation_draws,
-    recover_dual_vertex_from_binding, row_nonbinding_coeff_row_major_into,
+    compute_least_favorable_cv_uncached, dual_conditional_test, recover_dual_vertex_from_binding,
+    row_nonbinding_coeff_row_major_into, simulation_draws,
 };
 use super::super::linear_algebra::{
     bilinear_form_into, build_clarabel_matrix, diag_sqrt, dot, linear_grid, mat_vec_mul_into,

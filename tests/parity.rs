@@ -1735,8 +1735,12 @@ fn honest_joint_path_region_bonferroni_matches_r_fixture() {
     assert_eq!(rust.points.len(), fixture.points.len());
     for (rust_point, fixture_point) in rust.points.iter().zip(fixture.points.iter()) {
         assert_eq!(rust_point.post_period, fixture_point.post_period);
-        assert!((rust_point.assessment.robust_ci.0 - fixture_point.lb).abs() < HONEST_REGION_TOLERANCE);
-        assert!((rust_point.assessment.robust_ci.1 - fixture_point.ub).abs() < HONEST_REGION_TOLERANCE);
+        assert!(
+            (rust_point.assessment.robust_ci.0 - fixture_point.lb).abs() < HONEST_REGION_TOLERANCE
+        );
+        assert!(
+            (rust_point.assessment.robust_ci.1 - fixture_point.ub).abs() < HONEST_REGION_TOLERANCE
+        );
     }
 }
 
@@ -1796,8 +1800,12 @@ fn honest_directional_region_bonferroni_matches_r_fixture() {
         .zip(fixture.directions.iter())
     {
         assert_eq!(fixture_point.name, fixture_direction.name);
-        assert!((rust_point.assessment.robust_ci.0 - fixture_point.lb).abs() < HONEST_REGION_TOLERANCE);
-        assert!((rust_point.assessment.robust_ci.1 - fixture_point.ub).abs() < HONEST_REGION_TOLERANCE);
+        assert!(
+            (rust_point.assessment.robust_ci.0 - fixture_point.lb).abs() < HONEST_REGION_TOLERANCE
+        );
+        assert!(
+            (rust_point.assessment.robust_ci.1 - fixture_point.ub).abs() < HONEST_REGION_TOLERANCE
+        );
     }
 }
 

@@ -1416,12 +1416,9 @@ fn most_relative_magnitude_branches_are_infeasible_at_the_observed_pre_trend() {
     // index names which pre-period attains the largest violation, so at one
     // realised pre-trend only one branch can be feasible.
     let input = study_shaped_input();
-    let branches = prepare_relative_magnitude_branches(
-        input.num_pre_periods(),
-        input.num_post_periods(),
-        1.0,
-    )
-    .expect("prepared branches");
+    let branches =
+        prepare_relative_magnitude_branches(input.num_pre_periods(), input.num_post_periods(), 1.0)
+            .expect("prepared branches");
     let mut post_weights = vec![0.0; input.num_post_periods()];
     post_weights[0] = 1.0;
     let sets = compute_relative_magnitude_branch_identified_sets_with_prepared_branches(

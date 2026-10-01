@@ -33,8 +33,7 @@ use crate::inference::sensitivity::smoothness;
 use conditional_confidence_set::{
     RelativeMagnitudeConditionalBranch,
     compute_relative_magnitude_branch_accepted_range_for_matrix,
-    prepare_relative_magnitude_branch_draws,
-    solve_relative_magnitude_branch_with_matrix,
+    prepare_relative_magnitude_branch_draws, solve_relative_magnitude_branch_with_matrix,
 };
 use geometry::prepare_relative_magnitude_functional_transform;
 
