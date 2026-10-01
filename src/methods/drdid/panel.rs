@@ -2,7 +2,7 @@ use faer::Mat;
 use faer::prelude::SolveLstsq;
 use itertools::izip;
 
-use super::design::prune_design;
+use super::design::{DEPENDENCE_TOLERANCE, prune_design};
 use crate::estimators::common::linalg::{
     SpdCholeskyScratch, solve_spd_system, solve_spd_system_multi_rhs,
 };
@@ -29,6 +29,14 @@ use crate::util::usize_to_f64;
 /// ```
 ///
 /// where the weights follow the improved `DRDID` normalization.
+///
+/// Comparators whose fitted propensity score is 0.995 or higher are trimmed:
+/// their weight in both terms of the ATT, and in its influence function, is
+/// zero. This is `DRDID::drdid_panel` at its default `trim.level = 0.995`.
+/// Treated units are never trimmed, and the nuisance models are fitted on
+/// every row before the trim applies. The score itself is capped at
+/// `1 - propensity_clip`. [`fit_drdid_panel_nuisance`] returns the fitted
+/// scores, so a caller can count the comparators the trim removes.
 ///
 /// References:
 /// - Sant'Anna, P. H. C. and Zhao, J. (2020). "Doubly Robust Difference-in-
@@ -107,6 +115,73 @@ pub fn estimate_drdid_panel_flat(
     }
     let prepared = prepare_panel_flat(input)?;
     estimate_from_prepared(prepared, config)
+}
+
+/// The panel DR estimator's two nuisance models, as
+/// [`estimate_drdid_panel_flat`] fits them for its ATT.
+///
+/// The fits are the estimator's own: the same pruning of `input`'s design, the
+/// same weighted logistic propensity score by Newton-Raphson with
+/// `config.ridge` on the information matrix, and the same weighted least
+/// squares outcome regression among comparators. The standard errors are
+/// computed here and play no part in the ATT. Neither accounts for clustering.
+///
+/// # Errors
+/// As [`estimate_drdid_panel_flat`], and [`DrDidError::SingularSystem`] when
+/// an information matrix cannot be inverted for the standard errors.
+pub fn fit_drdid_panel_nuisance(
+    input: PanelFlatInput<'_>,
+    config: DrDidConfig,
+) -> Result<PanelNuisanceFit, DrDidError> {
+    validate_drdid_config(config)?;
+    if input.treated.is_empty() {
+        return Err(DrDidError::EmptyInput);
+    }
+    let prepared = prepare_panel_flat(input)?;
+    let fits = fit_panel_nuisance_models(&prepared, config)?;
+    let propensity_se = propensity_model_standard_errors(&prepared, &fits)?;
+    let outcome_se = outcome_hc0_standard_errors(&prepared, &fits)?;
+    Ok(PanelNuisanceFit {
+        kept_columns: prepared.kept_columns,
+        propensity_coefficients: fits.propensity.coefficients,
+        propensity_se,
+        iterations: fits.propensity.iterations,
+        converged: fits.propensity.converged,
+        propensity_scores: fits.propensity_scores,
+        outcome_coefficients: fits.outcome_coefficients,
+        outcome_se,
+        outcome_predictions: fits.outcome_predictions,
+    })
+}
+
+/// The two nuisance models of one panel DR fit; see [`fit_drdid_panel_nuisance`].
+///
+/// The coefficient vectors cover the kept columns only, in the input's order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PanelNuisanceFit {
+    /// One flag per column of the caller's design, true where the fit kept it.
+    /// See [`crate::independent_design_columns`], whose per-arm rule this is.
+    pub kept_columns: Vec<bool>,
+    /// Propensity score coefficients.
+    pub propensity_coefficients: Vec<f64>,
+    /// Their model-based standard errors: the root of the diagonal of the
+    /// inverse information matrix at the solution, without the ridge.
+    pub propensity_se: Vec<f64>,
+    /// Newton steps the propensity score took, counting the last.
+    pub iterations: usize,
+    /// Whether the last step was within `config.tol`. False when the
+    /// iteration budget ran out or no step along the last direction raised the
+    /// likelihood.
+    pub converged: bool,
+    /// The fitted propensity score of every row, capped at
+    /// `1 - propensity_clip`.
+    pub propensity_scores: Vec<f64>,
+    /// Outcome regression coefficients, fitted among comparators.
+    pub outcome_coefficients: Vec<f64>,
+    /// Their heteroskedasticity-robust (HC0) standard errors.
+    pub outcome_se: Vec<f64>,
+    /// The outcome regression's prediction for every row.
+    pub outcome_predictions: Vec<f64>,
 }
 
 fn estimate_from_prepared(
@@ -197,6 +272,7 @@ fn prepare_panel_flat(input: PanelFlatInput<'_>) -> Result<PanelPreparedData, Dr
         feature_count,
         &arms(&treated_indicator),
         input.weight,
+        DEPENDENCE_TOLERANCE,
     );
     Ok(PanelPreparedData {
         feature_count: design.feature_count,
@@ -208,6 +284,7 @@ fn prepare_panel_flat(input: PanelFlatInput<'_>) -> Result<PanelPreparedData, Dr
         sampling_weights: input.weight.to_vec(),
         design_matrix_flat: design.design_flat,
         design_columns_dropped: design.dropped,
+        kept_columns: design.kept,
     })
 }
 
@@ -224,6 +301,8 @@ struct PanelPreparedData {
     /// plus the covariates this sample can identify. See [`prune_design`].
     feature_count: usize,
     design_columns_dropped: usize,
+    /// One flag per input column, true where pruning kept it.
+    kept_columns: Vec<bool>,
     treated_n: usize,
     control_n: usize,
     total_weight: f64,
@@ -235,7 +314,9 @@ struct PanelPreparedData {
 
 struct PanelNuisanceFits {
     normalized_weights: Vec<f64>,
+    propensity: LogisticIrlsFit,
     propensity_scores: Vec<f64>,
+    outcome_coefficients: Vec<f64>,
     outcome_predictions: Vec<f64>,
 }
 
@@ -244,6 +325,8 @@ struct PanelAttEstimate {
     influence_function: Vec<f64>,
 }
 
+/// Comparators at or above this propensity score are trimmed from the ATT, as
+/// at `DRDID::drdid_panel`'s default `trim.level`.
 const PANEL_TRIM_LEVEL: f64 = 0.995;
 
 fn prepare_panel_data(observations: &[DrDidObservation]) -> Result<PanelPreparedData, DrDidError> {
@@ -310,6 +393,7 @@ fn prepare_panel_data(observations: &[DrDidObservation]) -> Result<PanelPrepared
         feature_count,
         &arms(&treated_indicator),
         &sampling_weights,
+        DEPENDENCE_TOLERANCE,
     );
     Ok(PanelPreparedData {
         feature_count: design.feature_count,
@@ -321,6 +405,7 @@ fn prepare_panel_data(observations: &[DrDidObservation]) -> Result<PanelPrepared
         sampling_weights,
         design_matrix_flat: design.design_flat,
         design_columns_dropped: design.dropped,
+        kept_columns: design.kept,
     })
 }
 
@@ -330,7 +415,7 @@ fn fit_panel_nuisance_models(
 ) -> Result<PanelNuisanceFits, DrDidError> {
     let normalized_weights = normalize_weights_to_n(&prepared.sampling_weights)?;
     let observation_count = prepared.treated_indicator.len();
-    let beta_ps = fit_logistic_irls(
+    let propensity = fit_logistic_irls(
         LogisticIrlsInputs {
             design_matrix_flat: &prepared.design_matrix_flat,
             feature_count: prepared.feature_count,
@@ -347,7 +432,7 @@ fn fit_panel_nuisance_models(
     let propensity_scores = predict_logistic_scores(
         &prepared.design_matrix_flat,
         prepared.feature_count,
-        &beta_ps,
+        &propensity.coefficients,
         config.propensity_clip,
     );
 
@@ -383,9 +468,95 @@ fn fit_panel_nuisance_models(
 
     Ok(PanelNuisanceFits {
         normalized_weights,
+        propensity,
         propensity_scores,
+        outcome_coefficients: beta_outcome,
         outcome_predictions,
     })
+}
+
+/// The model-based standard errors of the propensity score: the root of the
+/// diagonal of `(X' diag(w p (1 - p)) X)^-1` over every row.
+fn propensity_model_standard_errors(
+    prepared: &PanelPreparedData,
+    fits: &PanelNuisanceFits,
+) -> Result<Vec<f64>, DrDidError> {
+    let information = weighted_gram(prepared, |row| {
+        let p = fits.propensity_scores[row];
+        fits.normalized_weights[row] * p * (1.0 - p)
+    });
+    let inverse = spd_inverse(&information, prepared.feature_count)?;
+    Ok((0..prepared.feature_count)
+        .map(|i| inverse[(i, i)].max(0.0).sqrt())
+        .collect())
+}
+
+/// The HC0 standard errors of the outcome regression among comparators:
+/// `B^-1 M B^-1` with `B = X'WX` and `M = X' diag((w r)^2) X` over comparators,
+/// `r` the residual.
+fn outcome_hc0_standard_errors(
+    prepared: &PanelPreparedData,
+    fits: &PanelNuisanceFits,
+) -> Result<Vec<f64>, DrDidError> {
+    let comparator = |row: usize| prepared.treated_indicator[row] < 0.5;
+    let bread = weighted_gram(prepared, |row| {
+        if comparator(row) {
+            fits.normalized_weights[row]
+        } else {
+            0.0
+        }
+    });
+    let meat = weighted_gram(prepared, |row| {
+        if comparator(row) {
+            let scaled = fits.normalized_weights[row]
+                * (prepared.outcome_delta[row] - fits.outcome_predictions[row]);
+            scaled * scaled
+        } else {
+            0.0
+        }
+    });
+    let feature_count = prepared.feature_count;
+    let bread_inverse = spd_inverse(&bread, feature_count)?;
+    let meat = Mat::from_fn(feature_count, feature_count, |row, col| {
+        meat[row * feature_count + col]
+    });
+    let covariance = &bread_inverse * &meat * &bread_inverse;
+    Ok((0..feature_count)
+        .map(|i| covariance[(i, i)].max(0.0).sqrt())
+        .collect())
+}
+
+/// `X' diag(weight) X` over every row, row-major.
+fn weighted_gram(prepared: &PanelPreparedData, weight: impl Fn(usize) -> f64) -> Vec<f64> {
+    let feature_count = prepared.feature_count;
+    let mut gram = vec![0.0; feature_count * feature_count];
+    for (row, x) in prepared
+        .design_matrix_flat
+        .chunks_exact(feature_count)
+        .enumerate()
+    {
+        let w = weight(row);
+        if w == 0.0 {
+            continue;
+        }
+        for i in 0..feature_count {
+            let wi = w * x[i];
+            for j in i..feature_count {
+                gram[i * feature_count + j] += wi * x[j];
+            }
+        }
+    }
+    for i in 0..feature_count {
+        for j in 0..i {
+            gram[i * feature_count + j] = gram[j * feature_count + i];
+        }
+    }
+    gram
+}
+
+fn spd_inverse(matrix: &[f64], size: usize) -> Result<Mat<f64>, DrDidError> {
+    solve_spd_system_multi_rhs(matrix, &Mat::identity(size, size))
+        .map_err(|_| DrDidError::SingularSystem)
 }
 
 fn estimate_panel_att_and_influence(
@@ -658,6 +829,14 @@ struct LogisticIrlsInputs<'a> {
     normalized_weights: &'a [f64],
 }
 
+/// The propensity score's coefficients and how the iterations ended.
+#[derive(Debug)]
+struct LogisticIrlsFit {
+    coefficients: Vec<f64>,
+    iterations: usize,
+    converged: bool,
+}
+
 #[derive(Clone, Copy)]
 struct LogisticIrlsSettings {
     ridge: f64,
@@ -726,7 +905,7 @@ fn fit_weighted_linear(
 fn fit_logistic_irls(
     inputs: LogisticIrlsInputs<'_>,
     settings: LogisticIrlsSettings,
-) -> Result<Vec<f64>, DrDidError> {
+) -> Result<LogisticIrlsFit, DrDidError> {
     let observation_count = inputs.treated_indicator.len();
     let feature_count = inputs.feature_count;
     // The caller's, which is what they are for.
@@ -764,7 +943,7 @@ fn fit_logistic_irls(
     let mut scratch_solver = SpdCholeskyScratch::new(feature_count);
     let mut current_loglik = weighted_loglik(&coefficients, inputs, &mut probabilities);
 
-    for _ in 0..max_iterations {
+    for iteration in 1..=max_iterations {
         hessian.fill(0.0);
         gradient.fill(0.0);
 
@@ -808,7 +987,11 @@ fn fit_logistic_irls(
         }
         let max_step = step.iter().map(|value| value.abs()).fold(0.0, f64::max);
         if max_step <= convergence_tol {
-            return Ok(coefficients);
+            return Ok(LogisticIrlsFit {
+                coefficients,
+                iterations: iteration,
+                converged: true,
+            });
         }
 
         let mut step_scale = 1.0;
@@ -832,10 +1015,18 @@ fn fit_logistic_irls(
         }
 
         if !accepted {
-            return Ok(coefficients);
+            return Ok(LogisticIrlsFit {
+                coefficients,
+                iterations: iteration,
+                converged: false,
+            });
         }
     }
-    Ok(coefficients)
+    Ok(LogisticIrlsFit {
+        coefficients,
+        iterations: max_iterations,
+        converged: false,
+    })
 }
 
 fn predict_linear(x: &[f64], p: usize, beta: &[f64]) -> Vec<f64> {
@@ -893,6 +1084,176 @@ fn weighted_loglik(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Two strata of a binary covariate: two cases of ten at x = 0, six of
+    /// ten at x = 1, so a saturated score is 0.2 and 0.6.
+    fn strata() -> (Vec<bool>, Vec<f64>, Vec<f64>) {
+        let mut treated = Vec::new();
+        let mut delta = Vec::new();
+        let mut design = Vec::new();
+        for (x, cases) in [(0.0, 2), (1.0, 6)] {
+            for unit in 0..10_i32 {
+                let case = unit < cases;
+                treated.push(case);
+                delta.push(
+                    3.0_f64.mul_add(x, 5.0)
+                        + if case { -2.0 } else { 0.0 }
+                        + f64::from(unit) * f64::from(unit) * 0.01,
+                );
+                design.extend_from_slice(&[1.0, x]);
+            }
+        }
+        (treated, delta, design)
+    }
+
+    fn flat<'a>(
+        treated: &'a [bool],
+        delta: &'a [f64],
+        weight: &'a [f64],
+        design: &'a [f64],
+        feature_count: usize,
+    ) -> PanelFlatInput<'a> {
+        PanelFlatInput {
+            treated,
+            delta_outcome: delta,
+            weight,
+            design_matrix_flat: design,
+            feature_count,
+        }
+    }
+
+    #[test]
+    fn a_saturated_nuisance_fit_has_the_closed_form_coefficients_and_errors() {
+        let (treated, delta, design) = strata();
+        let weight = vec![1.0; treated.len()];
+        let fit = fit_drdid_panel_nuisance(
+            flat(&treated, &delta, &weight, &design, 2),
+            DrDidConfig::default(),
+        )
+        .unwrap();
+        assert!(fit.converged);
+        assert!(fit.iterations > 0);
+        assert_eq!(fit.kept_columns, vec![true, true]);
+
+        // logit(0.2) and logit(0.6) - logit(0.2), with variances
+        // 1 / (n p (1 - p)) per stratum.
+        let ps = &fit.propensity_coefficients;
+        assert!((ps[0] - 0.25_f64.ln()).abs() < 1e-7);
+        assert!((ps[1] - (1.5_f64.ln() - 0.25_f64.ln())).abs() < 1e-7);
+        assert!((fit.propensity_scores[0] - 0.2).abs() < 1e-8);
+        assert!((fit.propensity_scores[10] - 0.6).abs() < 1e-8);
+        let var0: f64 = 1.0 / (10.0 * 0.2 * 0.8);
+        let var1: f64 = 1.0 / (10.0 * 0.6 * 0.4);
+        assert!((fit.propensity_se[0] - var0.sqrt()).abs() < 1e-7);
+        assert!((fit.propensity_se[1] - (var0 + var1).sqrt()).abs() < 1e-7);
+
+        // Comparator means per stratum, and HC0 variances sum(r^2) / n^2.
+        let comparators = |lo: usize, hi: usize| -> (f64, f64) {
+            let rows: Vec<f64> = (lo..hi).map(|r| delta[r]).collect();
+            let n = usize_to_f64(rows.len());
+            let mean = rows.iter().sum::<f64>() / n;
+            let ss = rows.iter().map(|v| (v - mean).powi(2)).sum::<f64>();
+            (mean, ss / (n * n))
+        };
+        let (mean0, hc0) = comparators(2, 10);
+        let (mean1, hc1) = comparators(16, 20);
+        let or = &fit.outcome_coefficients;
+        // The outcome regression carries `config.ridge` on its diagonal.
+        assert!((or[0] - mean0).abs() < 1e-7);
+        assert!((or[1] - (mean1 - mean0)).abs() < 1e-7);
+        assert!((fit.outcome_se[0] - hc0.sqrt()).abs() < 1e-7);
+        assert!((fit.outcome_se[1] - (hc0 + hc1).sqrt()).abs() < 1e-7);
+        assert!((fit.outcome_predictions[0] - mean0).abs() < 1e-7);
+        assert!((fit.outcome_predictions[19] - mean1).abs() < 1e-7);
+    }
+
+    /// The ATT from a nuisance fit, comparators at or above `trim` given no
+    /// weight.
+    fn att_from(
+        fit: &PanelNuisanceFit,
+        treated: &[bool],
+        delta: &[f64],
+        weight: &[f64],
+        trim: f64,
+    ) -> f64 {
+        let (mut case_sum, mut case_weight) = (0.0, 0.0);
+        let (mut comp_sum, mut comp_weight) = (0.0, 0.0);
+        for row in 0..treated.len() {
+            let residual = delta[row] - fit.outcome_predictions[row];
+            let p = fit.propensity_scores[row];
+            if treated[row] {
+                case_sum += weight[row] * residual;
+                case_weight += weight[row];
+            } else if p < trim {
+                let odds = weight[row] * p / (1.0 - p);
+                comp_sum += odds * residual;
+                comp_weight += odds;
+            }
+        }
+        case_sum / case_weight - comp_sum / comp_weight
+    }
+
+    /// A panel with a stratum of 400 units of which one is a comparator, so
+    /// its score is above the trim, a column held only by cases, and a column
+    /// that repeats another.
+    fn panel_with_a_trimmed_comparator() -> (Vec<bool>, Vec<f64>, Vec<f64>, Vec<f64>) {
+        let mut state = 7_u64;
+        let mut uniform = || {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            usize_to_f64(usize::try_from(state >> 40).unwrap()) / usize_to_f64(1 << 24)
+        };
+        let (mut treated, mut delta, mut weight, mut design) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for row in 0..600_usize {
+            let x = if row < 200 { 0.0 } else { 1.0 };
+            let case = if row < 200 {
+                uniform() < 0.4
+            } else {
+                row != 302
+            };
+            let z = uniform() - 0.5;
+            let rare = if case && row % 5 == 0 { 1.0 } else { 0.0 };
+            treated.push(case);
+            delta.push(2.0f64.mul_add(x, z) + if case { 1.0 } else { 0.0 } + uniform());
+            weight.push([1.0, 0.5, 0.25][row % 3]);
+            design.extend_from_slice(&[1.0, x, z, rare, 2.0 * x]);
+        }
+        (treated, delta, weight, design)
+    }
+
+    #[test]
+    fn the_nuisance_fit_is_the_one_the_att_is_computed_from() {
+        let (treated, delta, weight, design) = panel_with_a_trimmed_comparator();
+        let config = DrDidConfig::default();
+        let input = flat(&treated, &delta, &weight, &design, 5);
+        let fit = fit_drdid_panel_nuisance(input, config).unwrap();
+        let estimate = estimate_drdid_panel_flat(input, config).unwrap();
+
+        // The rare column is zero among comparators and the last repeats x.
+        assert_eq!(fit.kept_columns, vec![true, true, true, false, false]);
+        assert_eq!(estimate.design_columns_dropped, 2);
+        assert_eq!(fit.propensity_coefficients.len(), 3);
+        assert_eq!(fit.outcome_coefficients.len(), 3);
+
+        // Some comparators sit above the trim, and the ATT is the one the
+        // fitted models give with those comparators left out.
+        assert!(
+            treated
+                .iter()
+                .zip(&fit.propensity_scores)
+                .any(|(&t, &p)| !t && p >= PANEL_TRIM_LEVEL)
+        );
+        let trimmed = att_from(&fit, &treated, &delta, &weight, PANEL_TRIM_LEVEL);
+        let untrimmed = att_from(&fit, &treated, &delta, &weight, f64::INFINITY);
+        assert!(
+            (estimate.att - trimmed).abs() < 1e-10,
+            "{} {trimmed}",
+            estimate.att
+        );
+        assert!((estimate.att - untrimmed).abs() > 1e-6);
+    }
 
     #[test]
     fn computes_standard_error_from_influence_function() {
@@ -1004,7 +1365,8 @@ mod tests {
                 propensity_clip: 1e-6,
             },
         )
-        .expect("irls");
+        .expect("irls")
+        .coefficients;
         assert_eq!(beta.len(), 2);
         assert!(beta.iter().all(|value| value.is_finite()));
 

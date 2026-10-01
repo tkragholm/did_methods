@@ -1,7 +1,7 @@
 use faer::Mat;
 use itertools::izip;
 
-use super::design::prune_design;
+use super::design::{DEPENDENCE_TOLERANCE, prune_design};
 use crate::estimators::outcome::linear::LinearOutcome;
 use crate::estimators::outcome::model::OutcomeModel;
 use crate::estimators::propensity::common::logistic_scores;
@@ -218,6 +218,7 @@ pub(super) fn prepare(
         feature_count,
         &cells,
         &sampling_weights,
+        DEPENDENCE_TOLERANCE,
     );
     Ok(RepeatedPreparedData {
         feature_count: design.feature_count,

@@ -108,8 +108,12 @@ pub use inference::sensitivity::{
     summarize_relative_magnitude_sensitivity, summarize_relative_magnitude_sensitivity_many,
     summarize_smoothness_sensitivity,
 };
-pub use methods::drdid::panel::estimate_drdid_panel;
+pub use methods::drdid::panel::{
+    PanelFlatInput, PanelNuisanceFit, estimate_drdid_panel, estimate_drdid_panel_flat,
+    fit_drdid_panel_nuisance,
+};
 pub use methods::drdid::repeated::estimate_drdid_repeated_cross_section;
+pub use methods::drdid::{DesignPruning, independent_design_columns};
 pub use methods::standard::{
     aggregate_event_time, estimate_att_from_summary, estimate_att_two_by_two, summarize_two_by_two,
 };

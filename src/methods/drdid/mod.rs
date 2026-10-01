@@ -16,3 +16,5 @@ pub mod moments;
 pub mod panel;
 pub mod repeated;
 pub mod repeated_efficient;
+
+pub use design::{DesignPruning, independent_design_columns};

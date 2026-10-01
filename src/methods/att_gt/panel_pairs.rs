@@ -378,6 +378,10 @@ fn estimate_panel_cell(
 /// cell at `g - 1 - anticipation`, which is what a fixed-baseline event study
 /// means; R's default is `"varying"` and produces different coefficients.
 ///
+/// Each cell is fitted by [`crate::estimate_drdid_panel_flat`], so comparators
+/// with a fitted propensity score of 0.995 or higher are trimmed from that
+/// cell's ATT, as in `did` and `DRDID`.
+///
 /// # Errors
 /// - [`AttGtError::MissingUnitId`] if any row lacks a unit id.
 /// - [`AttGtError::MissingCell`] if a cell has no treated or no control units
