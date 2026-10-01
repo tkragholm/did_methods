@@ -169,9 +169,11 @@ pub struct PanelNuisanceFit {
     pub propensity_se: Vec<f64>,
     /// Newton steps the propensity score took, counting the last.
     pub iterations: usize,
-    /// Whether the last step was within `config.tol`. False when the
-    /// iteration budget ran out or no step along the last direction raised the
-    /// likelihood.
+    /// Whether the iterations stopped at the maximum: on a step within
+    /// `config.tol`, or where no step along the last direction raised the
+    /// likelihood, on a Newton decrement within a relative `config.tol` of
+    /// it. False when the iteration budget ran out, or when the line search
+    /// failed with more of the likelihood still to gain.
     pub converged: bool,
     /// The fitted propensity score of every row, capped at
     /// `1 - propensity_clip`.
@@ -1015,10 +1017,16 @@ fn fit_logistic_irls(
         }
 
         if !accepted {
+            // No step along the direction raised the likelihood. Half the
+            // Newton decrement, g' H^-1 g / 2, is what a step could still
+            // gain, and below a relative `tol` of the likelihood the fit is
+            // at its maximum to working precision: `glm`'s rule, which stops
+            // on a relative change in the deviance.
+            let decrement = dot(&gradient, &step);
             return Ok(LogisticIrlsFit {
                 coefficients,
                 iterations: iteration,
-                converged: false,
+                converged: 0.5 * decrement <= convergence_tol * (current_loglik.abs() + 0.1),
             });
         }
     }
@@ -1253,6 +1261,75 @@ mod tests {
             estimate.att
         );
         assert!((estimate.att - untrimmed).abs() > 1e-6);
+    }
+
+    /// Twelve indicators, an age and a spline term of it, and an indicator
+    /// held by one case in twenty and one comparator in two thousand, which
+    /// nearly separates the arms.
+    fn registry_like_panel(seed: u64, n: usize) -> (Vec<bool>, Vec<f64>, Vec<f64>, Vec<f64>) {
+        let mut state = seed;
+        let mut uniform = || {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            usize_to_f64(usize::try_from(state >> 40).unwrap()) / usize_to_f64(1 << 24)
+        };
+        let (mut treated, mut delta, mut weight, mut design) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for _ in 0..n {
+            let case = uniform() < 0.2;
+            let age = 10.0f64.mul_add(uniform(), -5.0);
+            design.push(1.0);
+            for _ in 0..12 {
+                design.push(f64::from(u8::from(
+                    uniform() < if case { 0.25 } else { 0.2 },
+                )));
+            }
+            let rare = uniform() < if case { 0.05 } else { 0.0005 };
+            design.extend_from_slice(&[
+                age,
+                (age - 2.0).max(0.0).powi(3) / 9.0,
+                f64::from(u8::from(rare)),
+            ]);
+            treated.push(case);
+            delta.push(uniform());
+            weight.push(if case { 1.0 } else { 0.25 });
+        }
+        (treated, delta, weight, design)
+    }
+
+    #[test]
+    fn a_score_whose_steps_stall_above_tol_at_the_maximum_has_converged() {
+        // On this design the Newton steps stop shrinking at about 1.7e-8,
+        // above the 1e-8 tolerance, and the line search finds no step that
+        // raises the likelihood: the step is rounding, and the Newton
+        // decrement is 5e-16 against a likelihood of -2,600.
+        let (treated, delta, weight, design) = registry_like_panel(1, 4000);
+        let input = flat(&treated, &delta, &weight, &design, 16);
+        let fit = fit_drdid_panel_nuisance(input, DrDidConfig::default()).unwrap();
+        assert!(fit.converged);
+        assert!(fit.iterations < DrDidConfig::default().max_iter);
+        let loose =
+            fit_drdid_panel_nuisance(input, DrDidConfig::builder().tol(1e-5).build()).unwrap();
+        for (a, b) in fit
+            .propensity_coefficients
+            .iter()
+            .zip(&loose.propensity_coefficients)
+        {
+            assert!((a - b).abs() < 1e-5, "{a} {b}");
+        }
+    }
+
+    #[test]
+    fn a_score_that_runs_out_of_iterations_has_not_converged() {
+        let (treated, delta, weight, design) = registry_like_panel(1, 4000);
+        let fit = fit_drdid_panel_nuisance(
+            flat(&treated, &delta, &weight, &design, 16),
+            DrDidConfig::builder().max_iter(2).build(),
+        )
+        .unwrap();
+        assert!(!fit.converged);
+        assert_eq!(fit.iterations, 2);
     }
 
     #[test]
