@@ -1477,3 +1477,204 @@ fn the_prepared_basis_period_path_agrees_with_the_matrix_path() {
         );
     }
 }
+
+/// An AR(1) covariance with unit-scale standard errors that grow over the
+/// post-period, as the caller's rescaling to a largest SE of one leaves them.
+fn ar1_covariance(dim: usize, rho: f64) -> Vec<Vec<f64>> {
+    let last = f64::from(u32::try_from(dim - 1).expect("dimension fits"));
+    let se: Vec<f64> = (0..dim)
+        .map(|i| {
+            0.65f64.mul_add(
+                f64::from(u32::try_from(i).expect("index fits")) / last,
+                0.35,
+            )
+        })
+        .collect();
+    (0..dim)
+        .map(|i| {
+            (0..dim)
+                .map(|j| {
+                    let lag = i32::try_from(i.abs_diff(j)).expect("lag fits");
+                    se[i] * se[j] * rho.powi(lag)
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// Four pre-periods before the reference period and sixteen post-periods,
+/// with `betahat_pre` as given and a declining post-period path.
+fn near_tie_input(betahat_pre: [f64; 4]) -> HonestEventStudyInput {
+    let mut betahat = betahat_pre.to_vec();
+    betahat.extend((0..16).map(|t| {
+        let t = f64::from(t);
+        (0.006 * t).mul_add(t, 0.28f64.mul_add(-t, 0.3))
+    }));
+    let dim = betahat.len();
+    HonestEventStudyInput {
+        betahat,
+        covariance: ar1_covariance(dim, 0.6),
+        pre_periods: vec![-5, -4, -3, -2],
+        post_periods: (0..16).collect(),
+    }
+}
+
+/// The largest absolute step of the pre-period path, the reference period's
+/// zero included.
+fn largest_pre_step(betahat_pre: &[f64]) -> f64 {
+    let mut path = betahat_pre.to_vec();
+    path.push(0.0);
+    path.windows(2)
+        .map(|pair| (pair[1] - pair[0]).abs())
+        .fold(0.0, f64::max)
+}
+
+/// The base relative-magnitude identified set in closed form,
+/// `l'beta_post +/- Mbar * max_step * sum_j |sum_{t >= j} l_t|`.
+fn closed_form_identified_set(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+) -> (f64, f64) {
+    let num_pre = input.num_pre_periods();
+    let estimate: f64 = post_weights
+        .iter()
+        .zip(&input.betahat[num_pre..])
+        .map(|(weight, beta)| weight * beta)
+        .sum();
+    let reach: f64 = (0..post_weights.len())
+        .map(|j| post_weights[j..].iter().sum::<f64>().abs())
+        .sum();
+    let half_width = mbar * largest_pre_step(&input.betahat[..num_pre]) * reach;
+    (estimate - half_width, estimate + half_width)
+}
+
+#[test]
+fn a_near_tie_of_the_two_largest_pre_steps_solves_on_the_surface() {
+    // The two largest pre-period steps are 0.6016 (-3 to -2) and 0.6 (-2 to
+    // the reference period), 0.27 % apart. The branch that names the smaller
+    // one as the largest is infeasible by a small margin, which Clarabel
+    // cannot certify: it stopped with InsufficientProgress at the larger Mbar
+    // values of the late horizons.
+    let input = near_tie_input([-1.3916, -1.0816, -1.2016, -0.6]);
+    let inference = InferenceConfig::new(0.95);
+    let mbars = [0.75, 1.0, 1.5];
+    for horizon in [3, 9, 15] {
+        let mut post_weights = vec![0.0; input.num_post_periods()];
+        post_weights[horizon] = 1.0;
+        let summaries = summarize_relative_magnitude_sensitivity_many(
+            &input,
+            inference,
+            &[post_weights.as_slice()],
+            None,
+            Some(&mbars),
+            None,
+            None,
+            None,
+        )
+        .unwrap_or_else(|error| panic!("t+{horizon}: {error}"));
+        assert_eq!(summaries[0].rows.len(), mbars.len());
+        for (row, mbar) in summaries[0].rows.iter().zip(mbars) {
+            let identified = row.identified.as_ref().expect("identified set");
+            let (lb, ub) = closed_form_identified_set(&input, &post_weights, mbar);
+            assert!((identified.lb - lb).abs() < 1e-6, "t+{horizon} Mbar {mbar}");
+            assert!((identified.ub - ub).abs() < 1e-6, "t+{horizon} Mbar {mbar}");
+            assert!(row.lb <= identified.lb && identified.ub <= row.ub);
+        }
+    }
+}
+
+#[test]
+fn a_near_tie_of_the_two_largest_pre_steps_solves_on_the_joint_path() {
+    // The prepared-branch route of the joint path solves the same branch LPs.
+    // Here the two largest steps are -0.1845 (-4 to -3) and -0.183 (-3 to
+    // -2), 0.8 % apart.
+    let input = near_tie_input([0.40, 0.43, 0.2455, 0.0625]);
+    let inference = InferenceConfig::new(0.95);
+    let joint_config = HonestJointPathConfig {
+        method: HonestJointPathMethod::GaussianSimulated,
+        simulation_draws: 2_000,
+        simulation_seed: 7,
+    };
+    for mbar in [0.25, 0.5] {
+        let region = assess_honest_event_study_joint_path_region_with_config(
+            &input,
+            HonestSensitivity::RelativeMagnitude(mbar),
+            inference,
+            0.0,
+            RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+            joint_config,
+        )
+        .unwrap_or_else(|error| panic!("Mbar {mbar}: {error}"));
+        assert_eq!(region.points.len(), input.num_post_periods());
+        for (idx, point) in region.points.iter().enumerate() {
+            let mut post_weights = vec![0.0; input.num_post_periods()];
+            post_weights[idx] = 1.0;
+            let (lb, ub) = closed_form_identified_set(&input, &post_weights, mbar);
+            let (got_lb, got_ub) = point.assessment.identified_set;
+            assert!((got_lb - lb).abs() < 1e-6, "t+{idx} Mbar {mbar}");
+            assert!((got_ub - ub).abs() < 1e-6, "t+{idx} Mbar {mbar}");
+        }
+    }
+}
+
+mod near_tie_property {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn the_identified_set_matches_the_closed_form_when_the_largest_steps_nearly_tie(
+            largest in 0.2f64..1.0,
+            log_gap in -4.0f64..-2.0,
+            tied_at in 0usize..4,
+            other_offset in 1usize..4,
+            small_steps in proptest::collection::vec(-1.0f64..1.0, 2),
+            signs in proptest::collection::vec(any::<bool>(), 4),
+            random_weights in proptest::collection::vec(-1.0f64..1.0, 16),
+            one_hot in proptest::option::of(0usize..16),
+            mbar in 0.05f64..2.0,
+        ) {
+            // A single horizon, as most of the surface's functionals are, or
+            // a random linear combination of all of them.
+            let weights: Vec<f64> = match one_hot {
+                Some(horizon) => (0..16).map(|t| if t == horizon { 1.0 } else { 0.0 }).collect(),
+                None => random_weights,
+            };
+            prop_assume!(weights.iter().any(|weight| weight.abs() > 1e-3));
+            // Steps of the pre-period path, the last one into the reference
+            // period. Two are the largest, a relative gap of 1e-4 to 1e-2
+            // apart, and the other two are at most half the largest.
+            let other_at = (tied_at + other_offset) % 4;
+            let mut steps = [0.0f64; 4];
+            let mut rest = small_steps.iter();
+            for (idx, step) in steps.iter_mut().enumerate() {
+                let magnitude = if idx == tied_at {
+                    largest
+                } else if idx == other_at {
+                    largest * (1.0 - 10f64.powf(log_gap))
+                } else {
+                    0.5 * largest * rest.next().expect("two small steps").abs()
+                };
+                *step = if signs[idx] { magnitude } else { -magnitude };
+            }
+            // betahat_pre from the steps, walking back from the zero at the
+            // reference period.
+            let mut betahat_pre = [0.0f64; 4];
+            let mut level = 0.0;
+            for idx in (0..4).rev() {
+                level -= steps[idx];
+                betahat_pre[idx] = level;
+            }
+            let input = near_tie_input(betahat_pre);
+            let identified = compute_relative_magnitude_identified_set(&input, &weights, mbar)
+                .map_err(TestCaseError::fail)?;
+            let (lb, ub) = closed_form_identified_set(&input, &weights, mbar);
+            let tolerance = 1e-6 * (1.0 + lb.abs().max(ub.abs()));
+            prop_assert!((identified.lb - lb).abs() < tolerance, "lb {} vs {}", identified.lb, lb);
+            prop_assert!((identified.ub - ub).abs() < tolerance, "ub {} vs {}", identified.ub, ub);
+        }
+    }
+}

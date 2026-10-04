@@ -395,6 +395,9 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_ident
     prepared_branches
         .iter()
         .map(|branch| {
+            if pre_rows_infeasible(&branch.constraint_rows, num_pre, &input.betahat[..num_pre]) {
+                return Ok(None);
+            }
             let mut rhs = vec![0.0; branch.inequality_len];
             rhs.extend_from_slice(&input.betahat[..num_pre]);
             let mut workspace = RelativeMagnitudeIdentifiedSetWorkspace::new(
@@ -1028,6 +1031,29 @@ fn compute_relative_magnitude_branch_accepted_range_full_grid(
     compute_accepted_grid_range_full_grid(grid, |theta| evaluator.accepts(theta))
 }
 
+/// Whether a branch is infeasible on its pre-period rows alone.
+///
+/// The identified-set LP pins delta_pre to betahat_pre, so a constraint row
+/// with no post-period coefficient is a constant. When one is positive the
+/// branch asks a pre-period step to be the largest while another is larger,
+/// and the LP is infeasible. Deciding that here keeps a nearly tied pair of
+/// steps away from the interior-point solver, which stalls on it.
+fn pre_rows_infeasible(rows: &[Vec<f64>], num_pre: usize, beta_pre: &[f64]) -> bool {
+    let scale = beta_pre
+        .iter()
+        .fold(1.0_f64, |acc, value| acc.max(value.abs()));
+    rows.iter()
+        .filter(|row| row[num_pre..].iter().all(|value| *value == 0.0))
+        .any(|row| {
+            row[..num_pre]
+                .iter()
+                .zip(beta_pre)
+                .map(|(a, b)| a * b)
+                .sum::<f64>()
+                > 1e-9 * scale
+        })
+}
+
 pub(in crate::inference::sensitivity) fn solve_relative_magnitude_branch_with_matrix(
     num_pre: usize,
     num_post: usize,
@@ -1040,6 +1066,9 @@ pub(in crate::inference::sensitivity) fn solve_relative_magnitude_branch_with_ma
         .zip(&true_beta[num_pre..])
         .map(|(weight, beta)| weight * beta)
         .sum::<f64>();
+    if pre_rows_infeasible(inequality_matrix, num_pre, &true_beta[..num_pre]) {
+        return Ok(None);
+    }
     let objective = relative_magnitude_objective(num_pre, num_post, post_weights);
     let equality_matrix = create_pre_period_equality_matrix(num_pre, num_post);
     let mut rhs = vec![0.0; inequality_matrix.len()];
@@ -1290,4 +1319,32 @@ fn build_w_t(x_arp: &[Vec<f64>], sd_vec: &[f64]) -> Vec<Vec<f64>> {
             row
         })
         .collect()
+}
+
+#[cfg(test)]
+mod pre_rows_tests {
+    use super::pre_rows_infeasible;
+
+    const BETA_PRE: [f64; 3] = [0.4, 0.7, 1.0];
+
+    #[test]
+    fn a_violated_pre_only_row_makes_the_branch_infeasible() {
+        // 0.7 - 0.4 - 0.299 = 1e-3 > 0, so the row cannot hold at betahat_pre.
+        let rows = vec![vec![-1.0, 1.0, -0.299, 0.0, 0.0]];
+        assert!(pre_rows_infeasible(&rows, 3, &BETA_PRE));
+    }
+
+    #[test]
+    fn a_satisfied_pre_only_row_leaves_the_branch_to_the_solver() {
+        // 0.7 - 0.4 - 0.301 = -1e-3 <= 0.
+        let rows = vec![vec![-1.0, 1.0, -0.301, 0.0, 0.0]];
+        assert!(!pre_rows_infeasible(&rows, 3, &BETA_PRE));
+    }
+
+    #[test]
+    fn a_row_with_a_post_period_coefficient_is_not_decided_here() {
+        // The same violated pre-period part, but delta_post can still satisfy it.
+        let rows = vec![vec![-1.0, 1.0, -0.299, 0.0, -1e-12]];
+        assert!(!pre_rows_infeasible(&rows, 3, &BETA_PRE));
+    }
 }
