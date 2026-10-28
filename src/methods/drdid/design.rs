@@ -149,13 +149,16 @@ pub(super) fn prune_design(
     // One weighted Gram per group, upper triangle in full storage.
     let size = feature_count * feature_count;
     let mut grams = vec![0.0; group_count * size];
+    let mut nonzero: Vec<usize> = Vec::with_capacity(feature_count);
     for row in 0..row_count {
         let gram = &mut grams[group[row] * size..(group[row] + 1) * size];
         let x = &design_flat[row * feature_count..(row + 1) * feature_count];
         let w = weights[row];
-        for i in 0..feature_count {
+        nonzero.clear();
+        nonzero.extend((0..feature_count).filter(|&c| x[c] != 0.0));
+        for (a, &i) in nonzero.iter().enumerate() {
             let wi = w * x[i];
-            for j in i..feature_count {
+            for &j in &nonzero[a..] {
                 gram[i * feature_count + j] += wi * x[j];
             }
         }

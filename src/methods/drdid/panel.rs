@@ -532,6 +532,7 @@ fn outcome_hc0_standard_errors(
 fn weighted_gram(prepared: &PanelPreparedData, weight: impl Fn(usize) -> f64) -> Vec<f64> {
     let feature_count = prepared.feature_count;
     let mut gram = vec![0.0; feature_count * feature_count];
+    let mut nonzero: Vec<usize> = Vec::with_capacity(feature_count);
     for (row, x) in prepared
         .design_matrix_flat
         .chunks_exact(feature_count)
@@ -541,9 +542,11 @@ fn weighted_gram(prepared: &PanelPreparedData, weight: impl Fn(usize) -> f64) ->
         if w == 0.0 {
             continue;
         }
-        for i in 0..feature_count {
+        nonzero.clear();
+        nonzero.extend((0..feature_count).filter(|&c| x[c] != 0.0));
+        for (a, &i) in nonzero.iter().enumerate() {
             let wi = w * x[i];
-            for j in i..feature_count {
+            for &j in &nonzero[a..] {
                 gram[i * feature_count + j] += wi * x[j];
             }
         }
@@ -942,6 +945,7 @@ fn fit_logistic_irls(
     let mut candidate = vec![0.0; feature_count];
     let mut probabilities = vec![0.0; observation_count];
     let mut step = vec![0.0; feature_count];
+    let mut nonzero: Vec<usize> = Vec::with_capacity(feature_count);
     let mut scratch_solver = SpdCholeskyScratch::new(feature_count);
     let mut current_loglik = weighted_loglik(&coefficients, inputs, &mut probabilities);
 
@@ -962,12 +966,14 @@ fn fit_logistic_irls(
             let variance =
                 (weight * probability * (1.0 - probability)).max(settings.propensity_clip);
 
-            for left_feature_index in 0..feature_count {
+            nonzero.clear();
+            nonzero.extend((0..feature_count).filter(|&c| feature_row[c] != 0.0));
+            for (position, &left_feature_index) in nonzero.iter().enumerate() {
                 gradient[left_feature_index] = residual.mul_add(
                     feature_row[left_feature_index],
                     gradient[left_feature_index],
                 );
-                for right_feature_index in left_feature_index..feature_count {
+                for &right_feature_index in &nonzero[position..] {
                     let weighted_outer = variance
                         * feature_row[left_feature_index]
                         * feature_row[right_feature_index];
