@@ -109,8 +109,8 @@ pub use inference::sensitivity::{
     summarize_smoothness_sensitivity,
 };
 pub use methods::drdid::panel::{
-    PanelFlatInput, PanelNuisanceFit, estimate_drdid_panel, estimate_drdid_panel_flat,
-    fit_drdid_panel_nuisance,
+    PanelFlatInput, PanelNuisanceFit, PanelPropensityCoefficients, estimate_drdid_panel,
+    estimate_drdid_panel_flat, fit_drdid_panel_nuisance, fit_drdid_panel_propensity_coefficients,
 };
 pub use methods::drdid::repeated::estimate_drdid_repeated_cross_section;
 pub use methods::drdid::{DesignPruning, independent_design_columns};

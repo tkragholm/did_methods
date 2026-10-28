@@ -154,6 +154,65 @@ pub fn fit_drdid_panel_nuisance(
     })
 }
 
+/// The propensity score of [`fit_drdid_panel_nuisance`], without the rest.
+///
+/// Runs the same validation, the same per-arm pruning of `input`'s design and
+/// the same weighted logistic iterations as [`fit_drdid_panel_nuisance`], so
+/// the coefficients, the iteration count and the convergence flag equal its
+/// bit for bit whenever that fit succeeds. It skips the propensity and outcome
+/// standard errors and the outcome regression. A design for which those would
+/// fail with [`DrDidError::SingularSystem`] therefore succeeds here.
+///
+/// # Errors
+/// As [`estimate_drdid_panel_flat`], and the errors of the propensity
+/// iterations.
+pub fn fit_drdid_panel_propensity_coefficients(
+    input: PanelFlatInput<'_>,
+    config: DrDidConfig,
+) -> Result<PanelPropensityCoefficients, DrDidError> {
+    validate_drdid_config(config)?;
+    if input.treated.is_empty() {
+        return Err(DrDidError::EmptyInput);
+    }
+    let prepared = prepare_panel_flat(input)?;
+    let normalized_weights = normalize_weights_to_n(&prepared.sampling_weights)?;
+    let propensity = fit_logistic_irls(
+        LogisticIrlsInputs {
+            design_matrix_flat: &prepared.design_matrix_flat,
+            feature_count: prepared.feature_count,
+            treated_indicator: &prepared.treated_indicator,
+            normalized_weights: &normalized_weights,
+        },
+        LogisticIrlsSettings {
+            ridge: config.ridge,
+            max_iter: config.max_iter,
+            tol: config.tol,
+            propensity_clip: config.propensity_clip,
+        },
+    )?;
+    Ok(PanelPropensityCoefficients {
+        kept_columns: prepared.kept_columns,
+        coefficients: propensity.coefficients,
+        iterations: propensity.iterations,
+        converged: propensity.converged,
+    })
+}
+
+/// The result of [`fit_drdid_panel_propensity_coefficients`]; the fields are
+/// those of [`PanelNuisanceFit`] by the names `kept_columns`,
+/// `propensity_coefficients`, `iterations` and `converged`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PanelPropensityCoefficients {
+    /// One flag per column of the caller's design, true where the fit kept it.
+    pub kept_columns: Vec<bool>,
+    /// Propensity score coefficients, over the kept columns.
+    pub coefficients: Vec<f64>,
+    /// Newton steps the propensity score took, counting the last.
+    pub iterations: usize,
+    /// Whether the iterations stopped at the maximum.
+    pub converged: bool,
+}
+
 /// The two nuisance models of one panel DR fit; see [`fit_drdid_panel_nuisance`].
 ///
 /// The coefficient vectors cover the kept columns only, in the input's order.
@@ -1501,5 +1560,149 @@ mod tests {
         assert!(sigmoid(1_000.0) < 1.0);
         assert!(logit_clamped(0.0, 1e-6).is_finite());
         assert!(logit_clamped(1.0, 1e-6).is_finite());
+    }
+
+    /// A deterministic stream in [0, 1).
+    fn stream(seed: u64) -> impl FnMut() -> f64 {
+        let mut state = seed;
+        move || {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (state >> 11) as f64 / (1_u64 << 53) as f64
+        }
+    }
+
+    /// Study II's shape: an intercept, period and cell dummies that are
+    /// sparse in one arm, and one that only the treated arm has.
+    fn dummy_design(n: usize, seed: u64) -> (Vec<bool>, Vec<f64>, Vec<f64>, Vec<f64>, usize) {
+        let mut next = stream(seed);
+        let k = 9;
+        let (mut treated, mut delta, mut weight, mut design) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for row in 0..n {
+            let case = next() < 0.4;
+            let period = (next() * 6.0) as usize;
+            treated.push(case);
+            delta.push(0.0);
+            weight.push(0.2 + 3.0 * next());
+            let mut x = vec![0.0; k];
+            x[0] = 1.0;
+            x[1 + period] = 1.0;
+            x[7] = if case && row % 3 == 0 { 1.0 } else { 0.0 };
+            x[8] = 1.0 - x[1];
+            design.extend(x);
+        }
+        (treated, delta, weight, design, k)
+    }
+
+    fn continuous_design(
+        n: usize,
+        k: usize,
+        seed: u64,
+    ) -> (Vec<bool>, Vec<f64>, Vec<f64>, Vec<f64>) {
+        let mut next = stream(seed);
+        let (mut treated, mut delta, mut weight, mut design) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for _ in 0..n {
+            let x: Vec<f64> = (1..k).map(|_| next() * 4.0 - 2.0).collect();
+            let case = next() < 1.0 / (1.0 + (-(0.5 * x[0] - 0.3)).exp());
+            treated.push(case);
+            delta.push(next() - 0.5 + if case { 0.3 } else { 0.0 });
+            weight.push(0.3 + 2.0 * next());
+            design.push(1.0);
+            design.extend(x);
+        }
+        (treated, delta, weight, design)
+    }
+
+    fn assert_same_coefficients(
+        treated: &[bool],
+        delta: &[f64],
+        weight: &[f64],
+        design: &[f64],
+        k: usize,
+        config: DrDidConfig,
+    ) -> bool {
+        let input = PanelFlatInput {
+            treated,
+            delta_outcome: delta,
+            weight,
+            design_matrix_flat: design,
+            feature_count: k,
+        };
+        let full = fit_drdid_panel_nuisance(input, config);
+        let lean = fit_drdid_panel_propensity_coefficients(input, config);
+        let Ok(full) = full else {
+            return false;
+        };
+        let lean = lean.expect("the coefficients-only fit succeeds when the full fit does");
+        assert_eq!(lean.kept_columns, full.kept_columns);
+        assert_eq!(lean.iterations, full.iterations);
+        assert_eq!(lean.converged, full.converged);
+        assert_eq!(lean.coefficients.len(), full.propensity_coefficients.len());
+        for (a, b) in lean.coefficients.iter().zip(&full.propensity_coefficients) {
+            assert_eq!(a.to_bits(), b.to_bits());
+        }
+        true
+    }
+
+    #[test]
+    fn propensity_coefficients_equal_the_full_fits_bit_for_bit() {
+        let mut compared = 0;
+        for seed in 1..=12_u64 {
+            let (t, d, w, x, k) = dummy_design(400 + 37 * seed as usize, seed);
+            for config in [
+                DrDidConfig::default(),
+                DrDidConfig::builder().tol(1e-5).build(),
+            ] {
+                compared += usize::from(assert_same_coefficients(&t, &d, &w, &x, k, config));
+            }
+            let kc = 2 + (seed as usize % 6);
+            let (t, d, w, x) = continuous_design(300 + 50 * seed as usize, kc, 100 + seed);
+            compared += usize::from(assert_same_coefficients(
+                &t,
+                &d,
+                &w,
+                &x,
+                kc,
+                DrDidConfig::default(),
+            ));
+        }
+        assert!(compared >= 30, "only {compared} designs were compared");
+    }
+
+    #[test]
+    fn propensity_coefficients_keep_the_pruning_of_the_full_fit() {
+        let (t, d, w, x, k) = dummy_design(500, 7);
+        let input = PanelFlatInput {
+            treated: &t,
+            delta_outcome: &d,
+            weight: &w,
+            design_matrix_flat: &x,
+            feature_count: k,
+        };
+        let lean = fit_drdid_panel_propensity_coefficients(input, DrDidConfig::default()).unwrap();
+        assert!(lean.kept_columns.iter().any(|&kept| !kept));
+        assert_eq!(
+            lean.coefficients.len(),
+            lean.kept_columns.iter().filter(|&&kept| kept).count()
+        );
+    }
+
+    #[test]
+    fn propensity_coefficients_reject_what_the_full_fit_rejects_up_front() {
+        let config = DrDidConfig::default();
+        let input = PanelFlatInput {
+            treated: &[true, true],
+            delta_outcome: &[0.0, 1.0],
+            weight: &[1.0, 1.0],
+            design_matrix_flat: &[1.0, 1.0],
+            feature_count: 1,
+        };
+        assert_eq!(
+            fit_drdid_panel_propensity_coefficients(input, config).unwrap_err(),
+            fit_drdid_panel_nuisance(input, config).unwrap_err()
+        );
     }
 }
