@@ -205,7 +205,6 @@ pub fn estimate_drdid_repeated_efficient(
             .map_err(|_| DrDidError::InvalidConfig("max_iter exceeds u64".to_string()))?,
         tol: config.tol,
         min_weight: config.propensity_clip,
-        vstar: 700.0,
     };
     let target = Mat::from_fn(n, 1, |row, _| treated[row]);
     let fitted_ps = LogisticPS::new(propensity_config)

@@ -1,5 +1,4 @@
-use argmin::core::{CostFunction, Error as ArgminError, Executor, IterState, State};
-use argmin::solver::neldermead::NelderMead;
+use epistat_optim::nelder_mead::NelderMead;
 use rand::{SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -92,15 +91,12 @@ struct DirectionVarianceObjective<'a> {
     sigma_post: &'a [Vec<f64>],
 }
 
-impl CostFunction for DirectionVarianceObjective<'_> {
-    type Param = Vec<f64>;
-    type Output = f64;
-
-    fn cost(&self, param: &Self::Param) -> Result<Self::Output, ArgminError> {
+impl DirectionVarianceObjective<'_> {
+    fn cost(&self, param: &[f64]) -> f64 {
         let Some(direction) = canonicalize_unit_direction(param) else {
-            return Ok(1e6);
+            return 1e6;
         };
-        Ok(-projected_variance(&direction, self.sigma_post))
+        -projected_variance(&direction, self.sigma_post)
     }
 }
 
@@ -126,18 +122,16 @@ fn refine_direction_with_argmin(
         return Ok(Some(seed));
     }
     let simplex = build_nelder_mead_simplex(&seed);
-    let solver = NelderMead::new(simplex)
-        .with_sd_tolerance(1e-5)
-        .map_err(|err| format!("failed to configure Nelder-Mead tolerance: {err}"))?;
+    let solver = NelderMead {
+        sd_tolerance: 1e-5,
+        max_iterations: 35,
+        ..NelderMead::default()
+    };
     let problem = DirectionVarianceObjective { sigma_post };
-    let result = Executor::new(problem, solver)
-        .configure(|state: IterState<Vec<f64>, (), (), (), (), f64>| state.max_iters(35))
-        .run()
+    let minimum = solver
+        .minimize(simplex, |param| problem.cost(param))
         .map_err(|err| format!("Nelder-Mead refinement failed: {err}"))?;
-    Ok(result
-        .state()
-        .get_best_param()
-        .and_then(|vector| canonicalize_unit_direction(vector)))
+    Ok(canonicalize_unit_direction(&minimum.x))
 }
 
 fn top_ranked_indices_by_variance(

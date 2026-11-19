@@ -780,7 +780,6 @@ pub fn estimate_pair_ipw(
         max_iter: u64::try_from(drdid_cfg.max_iter).map_err(|_| ())?,
         tol: drdid_cfg.tol,
         min_weight: drdid_cfg.propensity_clip,
-        vstar: 700.0,
     };
     let est = LogisticPS::new(ps_cfg);
     let params = est

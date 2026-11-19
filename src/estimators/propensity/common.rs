@@ -5,8 +5,6 @@ use tracing::trace;
 
 pub struct GroupedBinaryRows {
     pub design: Mat<f64>,
-    pub treated_counts: Vec<f64>,
-    pub control_counts: Vec<f64>,
     pub total_counts: Vec<f64>,
     pub target_means: Mat<f64>,
 }
@@ -39,7 +37,6 @@ pub fn group_binary_design_rows(
     let mut key_to_group = HashMap::<Vec<u64>, usize>::new();
     let mut grouped_rows = Vec::<Vec<f64>>::new();
     let mut treated_counts = Vec::<f64>::new();
-    let mut control_counts = Vec::<f64>::new();
     let mut total_counts = Vec::<f64>::new();
     let mut key_bits = vec![0_u64; feature_count];
     let mut row_values = vec![0.0; feature_count];
@@ -58,7 +55,6 @@ pub fn group_binary_design_rows(
             key_to_group.insert(key_bits.clone(), group_index);
             grouped_rows.push(row_values.clone());
             treated_counts.push(0.0);
-            control_counts.push(0.0);
             total_counts.push(0.0);
             group_index
         };
@@ -66,8 +62,6 @@ pub fn group_binary_design_rows(
         let treated = target[(row_index, 0)] > 0.5;
         if treated {
             treated_counts[group_index] += 1.0;
-        } else {
-            control_counts[group_index] += 1.0;
         }
         total_counts[group_index] += 1.0;
     }
@@ -82,8 +76,6 @@ pub fn group_binary_design_rows(
 
     GroupedBinaryRows {
         design: grouped_design,
-        treated_counts,
-        control_counts,
         total_counts,
         target_means,
     }

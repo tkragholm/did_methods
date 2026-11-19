@@ -1,14 +1,10 @@
-use argmin::core::{CostFunction, Error as ArgminError, Executor, Gradient, IterState, State};
-use argmin::solver::linesearch::MoreThuenteLineSearch;
-use argmin::solver::quasinewton::BFGS;
+use epistat_optim::bfgs::Bfgs;
 use faer::{Mat, MatRef};
 use std::collections::HashMap;
 
 use super::common::softmax_scores;
 use super::types::{Config, MultinomialParams, MultinomialPropensityEstimator};
 use crate::error::InternalDidError;
-
-type MultinomialIterState = IterState<Vec<f64>, Vec<f64>, (), Vec<Vec<f64>>, (), f64>;
 
 pub struct MultinomialSoftmaxPS {
     pub cfg: Config,
@@ -85,24 +81,6 @@ impl MultinomialProblem {
     }
 }
 
-impl CostFunction for MultinomialProblem {
-    type Param = Vec<f64>;
-    type Output = f64;
-
-    fn cost(&self, p: &Vec<f64>) -> Result<f64, ArgminError> {
-        Ok(self.evaluate(p).0)
-    }
-}
-
-impl Gradient for MultinomialProblem {
-    type Param = Vec<f64>;
-    type Gradient = Vec<f64>;
-
-    fn gradient(&self, p: &Vec<f64>) -> Result<Vec<f64>, ArgminError> {
-        Ok(self.evaluate(p).1)
-    }
-}
-
 impl MultinomialPropensityEstimator for MultinomialSoftmaxPS {
     #[cfg_attr(feature = "hotpath", hotpath::measure)]
     fn fit_multinomial(
@@ -127,10 +105,6 @@ impl MultinomialPropensityEstimator for MultinomialSoftmaxPS {
             ));
         }
 
-        let linesearch = MoreThuenteLineSearch::<Vec<f64>, Vec<f64>, f64>::new()
-            .with_c(1e-4, 0.9)
-            .map_err(|err| argmin_to_did(&err))?;
-        let solver = BFGS::new(linesearch);
         let ridge = self.ridge.max(1e-10);
         let problem = build_grouped_problem(
             x,
@@ -141,43 +115,19 @@ impl MultinomialPropensityEstimator for MultinomialSoftmaxPS {
             self.cfg.min_weight,
         );
         let initial = vec![0.0; problem.x.ncols() * class_count];
-        let inverse_hessian = identity_matrix(initial.len());
-        let best = run_multinomial_bfgs(
-            problem,
-            initial,
-            inverse_hessian,
-            solver,
-            self.cfg.max_iter.max(25),
-        )?;
+        let solver = Bfgs {
+            max_iterations: usize::try_from(self.cfg.max_iter.max(25)).unwrap_or(usize::MAX),
+            ..Bfgs::default()
+        };
+        let best = solver
+            .minimize(&initial, |params| problem.evaluate(params), None)
+            .map_err(|err| InternalDidError::Estimation(err.to_string()))?
+            .x;
 
         Ok(MultinomialParams {
             beta: vec_to_mat(&best, x.ncols(), class_count),
         })
     }
-}
-
-#[allow(clippy::too_many_arguments)]
-#[cfg_attr(feature = "hotpath", hotpath::measure)]
-fn run_multinomial_bfgs(
-    problem: MultinomialProblem,
-    initial: Vec<f64>,
-    inverse_hessian: Vec<Vec<f64>>,
-    solver: BFGS<MoreThuenteLineSearch<Vec<f64>, Vec<f64>, f64>, f64>,
-    max_iters: u64,
-) -> Result<Vec<f64>, InternalDidError> {
-    let result = Executor::new(problem, solver)
-        .configure(|state: MultinomialIterState| {
-            state
-                .param(initial)
-                .inv_hessian(inverse_hessian)
-                .max_iters(max_iters)
-        })
-        .run()
-        .map_err(|err| argmin_to_did(&err))?;
-
-    result.state().get_best_param().cloned().ok_or_else(|| {
-        InternalDidError::Convergence("multinomial softmax produced no solution".to_string())
-    })
 }
 
 #[cfg_attr(feature = "hotpath", hotpath::measure)]
@@ -252,20 +202,6 @@ fn vec_to_mat(values: &[f64], feature_count: usize, class_count: usize) -> Mat<f
     Mat::from_fn(feature_count, class_count, |feature, class| {
         values[param_index(feature, class, class_count)]
     })
-}
-
-fn identity_matrix(size: usize) -> Vec<Vec<f64>> {
-    (0..size)
-        .map(|row| {
-            (0..size)
-                .map(|col| if row == col { 1.0 } else { 0.0 })
-                .collect()
-        })
-        .collect()
-}
-
-fn argmin_to_did(error: &ArgminError) -> InternalDidError {
-    InternalDidError::Estimation(error.to_string())
 }
 
 #[cfg(test)]

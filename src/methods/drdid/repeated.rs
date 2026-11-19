@@ -252,7 +252,6 @@ fn fit_repeated_nuisance_models(
             .map_err(|_| DrDidError::InvalidConfig("max_iter exceeds u64".to_string()))?,
         tol: config.tol,
         min_weight: config.propensity_clip,
-        vstar: 700.0,
     };
     let propensity = LogisticPS::new(propensity_cfg);
     let propensity_params = propensity

@@ -1,5 +1,4 @@
 // Propensity score estimation methods
-pub mod bfgs;
 pub mod common;
 #[cfg(test)]
 pub mod ipt;

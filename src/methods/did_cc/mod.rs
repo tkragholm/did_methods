@@ -801,7 +801,6 @@ fn propensity_cfg(config: crate::types::DrDidConfig) -> Result<PropensityConfig,
             .map_err(|_| DidCcError::InvalidConfig("max_iter exceeds u64".to_string()))?,
         tol: config.tol,
         min_weight: config.propensity_clip,
-        vstar: 700.0,
     })
 }
 

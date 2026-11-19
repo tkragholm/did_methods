@@ -21,7 +21,6 @@ pub struct Config {
     pub max_iter: u64,
     pub tol: f64,
     pub min_weight: f64,
-    pub vstar: f64,
 }
 
 impl Default for Config {
@@ -30,7 +29,6 @@ impl Default for Config {
             max_iter: 100,
             tol: 1e-6,
             min_weight: 1e-10,
-            vstar: 700.0,
         }
     }
 }

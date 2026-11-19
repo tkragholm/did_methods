@@ -21,9 +21,9 @@ hotpath-alloc = ["hotpath", "hotpath/hotpath-alloc"]
 
 [dependencies]
 bon = "3"
-argmin = { git = "https://github.com/cloudsftp/argmin", branch = "update-faer-v24" }
-argmin-math = { git = "https://github.com/cloudsftp/argmin", package = "argmin-math", branch = "update-faer-v24", default-features = false, features = ["vec", "faer_v0_24"] }
 clarabel = { version = "0.11.1", optional = true }
+# BFGS and Nelder-Mead. A git dependency pinned by `rev` until epistat is on crates.io.
+epistat-optim = { git = "https://github.com/tkragholm/epistat", rev = "9b49113fb7493846f033694c0034c74eb86c8938" }
 dyn-stack = "0.13.2"
 faer = { version = "0.24.0", features = ["nightly", "perf-warn"] }
 itertools = "0.14"
