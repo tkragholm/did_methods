@@ -29,8 +29,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use faer::linalg::matmul::matmul;
 use faer::{Accum, Mat, MatRef, Par};
 
-use crate::estimators::common::linalg::solve_spd_system;
-use crate::inference::{validate_confidence_level, z_score_for_confidence};
+use crate::inference::{normal_interval, validate_confidence_level};
 use crate::methods::att_gt::pair_estimators::{
     build_pair_rows, missing_pair_cell, prepare_att_gt_dr_inputs,
 };
@@ -43,6 +42,7 @@ use crate::types::{
     EfficientDidEventTimeEstimate, EfficientDidEventTimeInfluenceOutput,
 };
 use crate::util::usize_to_f64;
+use epistat_linalg::{Attempt, Method, Ridge, solve};
 
 #[derive(Debug, Clone)]
 struct UnitSeries {
@@ -221,8 +221,8 @@ fn estimate_group_time_efficient_dr(
     combine_influences_into(&baseline_samples, weights, &mut influence);
     let variance = influence.iter().map(|value| value * value).sum::<f64>() / usize_to_f64(full_n);
     let se = (variance / usize_to_f64(full_n)).sqrt();
-    let z = z_score_for_confidence(config.att_gt.confidence_level.confidence_level);
-    let margin = z * se;
+    let (ci_low, ci_high) =
+        normal_interval(att, se, config.att_gt.confidence_level.confidence_level);
     let reference_counts = &baseline_samples.samples[0];
 
     Ok(Some(EfficientDidEstimate {
@@ -231,8 +231,8 @@ fn estimate_group_time_efficient_dr(
         event_time: time - group,
         att,
         se,
-        ci_low: att - margin,
-        ci_high: att + margin,
+        ci_low,
+        ci_high,
         treated_n: reference_counts.treated_n,
         control_n: reference_counts.control_n,
         baseline_weights: baseline_samples
@@ -439,8 +439,7 @@ fn estimate_group_time(
     combine_influences_into(&baseline_samples, weights, &mut influence);
     let variance = influence.iter().map(|value| value * value).sum::<f64>() / usize_to_f64(n_total);
     let se = (variance / usize_to_f64(n_total)).sqrt();
-    let z = z_score_for_confidence(config.confidence_level.confidence_level);
-    let margin = z * se;
+    let (ci_low, ci_high) = normal_interval(att, se, config.confidence_level.confidence_level);
 
     Ok(EfficientDidEstimate {
         group,
@@ -448,8 +447,8 @@ fn estimate_group_time(
         event_time: time - group,
         att,
         se,
-        ci_low: att - margin,
-        ci_high: att + margin,
+        ci_low,
+        ci_high,
         treated_n: treated_panel.len(),
         control_n: control_panel.len(),
         baseline_weights: baseline_samples
@@ -586,7 +585,6 @@ where
         grouped.entry(key_fn(estimate)).or_default().push(estimate);
     }
 
-    let z = z_score_for_confidence(config.confidence_level.confidence_level);
     let mut grouped_estimates = BTreeMap::new();
     let mut grouped_influence = Vec::with_capacity(grouped.len());
     let mut influence_scratch = vec![0.0; influence_len];
@@ -614,14 +612,15 @@ where
             }
         }
         let se = variance.sqrt();
-        let margin = z * se;
+        let (ci_low, ci_high) =
+            normal_interval(estimate, se, config.confidence_level.confidence_level);
         grouped_estimates.insert(
             key,
             AttGtAggregatedEstimate {
                 estimate,
                 se,
-                ci_low: estimate - margin,
-                ci_high: estimate + margin,
+                ci_low,
+                ci_high,
                 components: component_count,
                 total_weight,
             },
@@ -744,30 +743,37 @@ fn efficient_weights(covariance: &[f64]) -> Result<EfficientWeightSolution, Effi
     })
 }
 
+/// Solves `covariance x = rhs` by the symmetric fallback chain, and if that
+/// fails by Cholesky with a diagonal ridge starting at `1e-8` times the mean
+/// absolute diagonal and growing by 100 for up to six tries. The second element
+/// is the ridge that was used.
 fn solve_with_ridge_fallback(covariance: &[f64], rhs: &[f64]) -> Option<(Vec<f64>, Option<f64>)> {
-    if let Ok(solution) = solve_spd_system(covariance, rhs) {
-        return Some((solution, None));
-    }
-
     let dimension = rhs.len();
     let mean_diagonal = (0..dimension)
         .map(|index| covariance[index * dimension + index].abs())
         .sum::<f64>()
         / usize_to_f64(dimension).max(1.0);
-
-    let mut ridge_scale = 1e-8 * mean_diagonal;
-    let mut regularized = covariance.to_vec();
-    for _ in 0..6 {
-        regularized.copy_from_slice(covariance);
-        for index in 0..dimension {
-            regularized[index * dimension + index] += ridge_scale;
-        }
-        if let Ok(solution) = solve_spd_system(&regularized, rhs) {
-            return Some((solution, Some(ridge_scale)));
-        }
-        ridge_scale *= 100.0;
-    }
-    None
+    let ridge = Ridge {
+        start: 1e-8 * mean_diagonal,
+        growth: 100.0,
+        tries: 6,
+    };
+    let attempts = [
+        Attempt::SYMMETRIC[0],
+        Attempt::SYMMETRIC[1],
+        Attempt::SYMMETRIC[2],
+        Attempt::SYMMETRIC[3],
+        Attempt::ridged(Method::Cholesky, ridge),
+    ];
+    let system = MatRef::from_row_major_slice(covariance, dimension, dimension);
+    let solution = solve(
+        system,
+        MatRef::from_column_major_slice(rhs, dimension, 1),
+        &attempts,
+    )
+    .ok()?;
+    let ridge_used = (solution.ridge > 0.0).then_some(solution.ridge);
+    Some((solution.x.col(0).iter().copied().collect(), ridge_used))
 }
 
 fn covariance_matrix_rows(covariance: &[f64], dimension: usize) -> Vec<Vec<f64>> {

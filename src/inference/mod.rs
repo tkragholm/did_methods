@@ -66,6 +66,13 @@ pub fn validate_confidence_level(confidence_level: f64) -> bool {
     confidence_level.is_finite() && confidence_level > 0.0 && confidence_level < 1.0
 }
 
+/// The Wald interval `estimate -/+ z se` at the given confidence level, `NaN`
+/// at both ends when the level is outside (0, 1).
+pub(crate) fn normal_interval(estimate: f64, se: f64, confidence_level: f64) -> (f64, f64) {
+    epistat_inference::interval::normal(estimate, se, 1.0 - confidence_level)
+        .unwrap_or((f64::NAN, f64::NAN))
+}
+
 /// Two-sided normal critical value for a confidence level in (0, 1).
 #[must_use]
 pub fn z_score_for_confidence(confidence_level: f64) -> f64 {
@@ -139,8 +146,8 @@ pub fn clustered_ci_from_index(
         ));
     }
     let se = clustered_standard_error_from_index(influence_function, cluster_index)?;
-    let margin = z_score_for_confidence(inference.confidence_level) * se;
-    Ok((se, estimate - margin, estimate + margin))
+    let (low, high) = normal_interval(estimate, se, inference.confidence_level);
+    Ok((se, low, high))
 }
 
 /// Computes the clustered variance from influence function values. Clusters
@@ -193,8 +200,8 @@ pub fn clustered_ci_from_influence<L: Eq + Hash>(
         ));
     }
     let se = clustered_standard_error_from_influence(influence_function, cluster_labels)?;
-    let margin = z_score_for_confidence(inference.confidence_level) * se;
-    Ok((se, estimate - margin, estimate + margin))
+    let (low, high) = normal_interval(estimate, se, inference.confidence_level);
+    Ok((se, low, high))
 }
 
 /// Percentile interval of the Rademacher multiplier bootstrap of an estimate
@@ -221,18 +228,6 @@ pub fn multiplier_bootstrap_ci(
     let lower = quantile_unsorted(&mut draws, alpha / 2.0);
     let upper = quantile_unsorted(&mut draws, 1.0 - alpha / 2.0);
     (lower, upper)
-}
-
-/// Overwrites `signs` with independent Rademacher multipliers, +1 for a set
-/// bit, taking 64 signs from each output of `stream`.
-pub(crate) fn fill_rademacher_signs(stream: &mut epistat_rng::Stream, signs: &mut [f64]) {
-    for chunk in signs.chunks_mut(64) {
-        let mut bits = stream.next_u64();
-        for sign in chunk {
-            *sign = if bits & 1 == 1 { 1.0 } else { -1.0 };
-            bits >>= 1;
-        }
-    }
 }
 
 /// Type 7 quantile of a sorted sample, with `q` clamped to `[0, 1]`. NaN for an

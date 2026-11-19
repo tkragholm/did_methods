@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::time::Instant;
 use tracing::debug;
 
-use super::super::super::linear_algebra::{draw_standard_normal_vec, post_covariance_block};
+use super::super::super::linear_algebra::post_covariance_block;
 use super::super::super::{
     HonestDirectionalRegion, HonestDirectionalRegionDiagnostics, HonestEventStudyInput,
     HonestJointPathConfig, HonestOptimizationSurfaceAdaptiveRunConfig,
@@ -245,7 +245,8 @@ fn generate_optimization_surface_directions(
     if config.random_unit_directions > 0 {
         let mut rng = Stream::seeded(config.random_seed);
         for _ in 0..config.random_unit_directions {
-            let raw = draw_standard_normal_vec(&mut rng, num_post);
+            let mut raw = vec![0.0; num_post];
+            rng.fill_normals(&mut raw);
             if let Some(unit) = canonicalize_unit_direction(&raw) {
                 directions.push(unit);
                 is_random.push(true);

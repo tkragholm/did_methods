@@ -4,8 +4,7 @@ use crate::inference::sensitivity::{
     assess_honest_event_study_functional_with_config,
 };
 use crate::inference::{
-    ClusterIndex, clustered_standard_error_from_index, validate_confidence_level,
-    z_score_for_confidence,
+    ClusterIndex, clustered_standard_error_from_index, normal_interval, validate_confidence_level,
 };
 use crate::types::{
     AttGtAggregationError, AttGtConfig, AttGtDrConfig, AttGtDrObservation, AttGtError,
@@ -113,15 +112,13 @@ pub struct EventTimeResult {
 impl EventTimeResult {
     fn update_clustered_inference(&mut self) {
         if let Some(ref ci) = self.cluster_index {
-            let z = z_score_for_confidence(self.config.confidence_level);
             for (idx, est) in self.estimates.iter_mut().enumerate() {
                 if let Ok(se) =
                     clustered_standard_error_from_index(&self.influence_functions[idx], ci)
                 {
                     est.summary.se = se;
-                    let margin = z * se;
-                    est.summary.ci_low = est.summary.estimate - margin;
-                    est.summary.ci_high = est.summary.estimate + margin;
+                    (est.summary.ci_low, est.summary.ci_high) =
+                        normal_interval(est.summary.estimate, se, self.config.confidence_level);
                 }
             }
         }

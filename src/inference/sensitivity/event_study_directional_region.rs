@@ -1,7 +1,6 @@
 use super::super::super::linear_algebra::{
-    cholesky_lower, critical_value_from_pointwise_confidence, dot,
-    pointwise_confidence_level_from_critical, post_covariance_block,
-    simulated_lower_cholesky_maxima_batched, simulation_rank,
+    critical_value_from_pointwise_confidence, functional_covariance_matrix,
+    pointwise_confidence_level_from_critical, post_covariance_block, sup_t_critical_value,
 };
 use super::super::super::relative_magnitude::geometry::basis_vector_index;
 use super::super::super::{
@@ -59,53 +58,6 @@ fn validate_direction(direction: &[f64], num_post: usize) -> Result<(), String> 
     Ok(())
 }
 
-fn direction_correlation_matrix(
-    input: &HonestEventStudyInput,
-    directions: &[Vec<f64>],
-) -> Result<Vec<Vec<f64>>, String> {
-    let sigma_post = post_covariance_block(
-        &input.covariance,
-        input.num_pre_periods(),
-        input.num_post_periods(),
-    );
-    let projected = directions
-        .iter()
-        .map(|direction| {
-            sigma_post
-                .iter()
-                .map(|row| dot(direction, row))
-                .collect::<Vec<f64>>()
-        })
-        .collect::<Vec<_>>();
-    let variances = projected
-        .iter()
-        .zip(directions.iter())
-        .map(|(sigma_l, direction)| dot(direction, sigma_l).max(0.0))
-        .collect::<Vec<_>>();
-    if variances.iter().any(|variance| *variance <= 1e-14) {
-        return Err(
-            "one or more direction vectors have near-zero variance under the post covariance"
-                .to_string(),
-        );
-    }
-    let stddev = variances
-        .iter()
-        .map(|value| value.sqrt())
-        .collect::<Vec<_>>();
-    let n = directions.len();
-    let mut corr = vec![vec![0.0; n]; n];
-    for i in 0..n {
-        corr[i][i] = 1.0;
-        for j in (i + 1)..n {
-            let cov_ij = dot(&directions[i], &projected[j]);
-            let c = (cov_ij / (stddev[i] * stddev[j])).clamp(-1.0, 1.0);
-            corr[i][j] = c;
-            corr[j][i] = c;
-        }
-    }
-    Ok(corr)
-}
-
 fn simulated_directional_pointwise_confidence_level(
     input: &HonestEventStudyInput,
     confidence_level: f64,
@@ -116,15 +68,22 @@ fn simulated_directional_pointwise_confidence_level(
     if simulation_draws == 0 {
         return Err("directional simulation_draws must be positive".to_string());
     }
-    let corr = direction_correlation_matrix(input, directions)?;
-    let chol = cholesky_lower(&corr)?;
-    let mut maxima =
-        simulated_lower_cholesky_maxima_batched(&chol, simulation_draws, simulation_seed);
-    let n = maxima.len();
-    let rank = simulation_rank(n, confidence_level);
-    maxima.select_nth_unstable_by(rank.min(n - 1), f64::total_cmp);
-    let critical = maxima[rank.min(n - 1)];
-    Ok(critical)
+    let sigma_post = post_covariance_block(
+        &input.covariance,
+        input.num_pre_periods(),
+        input.num_post_periods(),
+    );
+    let covariance = functional_covariance_matrix(
+        &sigma_post,
+        directions,
+        "one or more direction vectors have near-zero variance under the post covariance",
+    )?;
+    sup_t_critical_value(
+        &covariance,
+        confidence_level,
+        simulation_draws,
+        simulation_seed,
+    )
 }
 
 fn validate_direction_set(

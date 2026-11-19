@@ -7,16 +7,7 @@ use super::{linear_algebra, relative_magnitude};
 pub fn benchmark_sensitivity_normal_draws(count: usize, seed: u64) -> f64 {
     let mut rng = Stream::seeded(seed);
     let mut out = vec![0.0; count];
-    linear_algebra::draw_standard_normal_vec_into(&mut rng, &mut out);
-    out.iter().sum()
-}
-
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_sensitivity_normal_draws_scalar(count: usize, seed: u64) -> f64 {
-    let mut rng = Stream::seeded(seed);
-    let mut out = vec![0.0; count];
-    linear_algebra::draw_standard_normal_vec_into_scalar(&mut rng, &mut out);
+    rng.fill_normals(&mut out);
     out.iter().sum()
 }
 
@@ -44,32 +35,15 @@ pub fn benchmark_sensitivity_rref_pivot_columns(matrix: &[Vec<f64>], tol: f64) -
 
 #[doc(hidden)]
 #[must_use]
-pub fn benchmark_sensitivity_multi_flci_maxima(
-    chol: &[Vec<f64>],
+pub fn benchmark_sensitivity_multi_flci_critical_value(
+    covariance: &[Vec<f64>],
     simulation_draws: usize,
     simulation_seed: u64,
 ) -> f64 {
-    relative_magnitude::least_favorable_intervals::benchmark_multi_flci_maxima(
-        chol,
+    relative_magnitude::least_favorable_intervals::benchmark_multi_flci_critical_value(
+        covariance,
         simulation_draws,
         simulation_seed,
     )
-    .iter()
-    .sum()
-}
-
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_sensitivity_multi_flci_maxima_scalar(
-    chol: &[Vec<f64>],
-    simulation_draws: usize,
-    simulation_seed: u64,
-) -> f64 {
-    relative_magnitude::least_favorable_intervals::benchmark_multi_flci_maxima_scalar(
-        chol,
-        simulation_draws,
-        simulation_seed,
-    )
-    .iter()
-    .sum()
+    .unwrap_or(f64::NAN)
 }

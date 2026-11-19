@@ -15,7 +15,11 @@
 //! minimised from the same start. When that fails as well, the logit
 //! coefficients are used. Designs are row-major with the intercept in column 0.
 
+use epistat_linalg::{weighted_gram, weighted_xtz};
+use faer::MatRef;
+
 use crate::estimators::common::linalg::solve_dense_system;
+use crate::estimators::common::logit::fit_logit;
 use crate::types::DrDidError;
 use crate::util::usize_to_f64;
 
@@ -23,6 +27,7 @@ const NEWTON_MAX_ITER: usize = 1_000;
 const HALVINGS: usize = 40;
 const STEP_TOL: f64 = 1e-12;
 const LOGIT_MAX_ITER: usize = 200;
+const LOGIT_TOLERANCE: f64 = 1e-12;
 
 /// Which fit supplied the coefficients of a propensity score.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,23 +81,16 @@ pub(super) fn weighted_least_squares(
     weights: &[f64],
     keep: impl Fn(usize) -> bool,
 ) -> Result<Vec<f64>, DrDidError> {
-    let mut gram = vec![0.0; p * p];
-    let mut rhs = vec![0.0; p];
-    for (i, row) in design.chunks_exact(p).enumerate() {
-        if !keep(i) {
-            continue;
-        }
-        let w = weights[i];
-        for a in 0..p {
-            let wa = w * row[a];
-            rhs[a] += wa * y[i];
-            for b in 0..=a {
-                gram[a * p + b] += wa * row[b];
-            }
-        }
-    }
-    symmetrise(&mut gram, p);
-    solve_dense_system(&gram, &rhs).map_err(|_| DrDidError::SingularSystem)
+    let n = y.len();
+    let kept_weights: Vec<f64> = (0..n)
+        .map(|i| if keep(i) { weights[i] } else { 0.0 })
+        .collect();
+    let x = MatRef::from_row_major_slice(design, n, p);
+    let gram = weighted_gram(x, &kept_weights).map_err(|_| DrDidError::SingularSystem)?;
+    let rhs = weighted_xtz(x, &kept_weights, y).map_err(|_| DrDidError::SingularSystem)?;
+    let gram_flat: Vec<f64> = (0..p * p).map(|k| gram[(k / p, k % p)]).collect();
+    let rhs_flat: Vec<f64> = (0..p).map(|k| rhs[(k, 0)]).collect();
+    solve_dense_system(&gram_flat, &rhs_flat).map_err(|_| DrDidError::SingularSystem)
 }
 
 /// The fitted values `x_i'b` of every row.
@@ -111,45 +109,18 @@ fn symmetrise(gram: &mut [f64], p: usize) {
     }
 }
 
-/// Weighted logit by iteratively reweighted least squares.
+/// The weighted logit maximum likelihood fit, with the iterations stopped by
+/// the relative change in the deviance or after `LOGIT_MAX_ITER`.
 fn fit_weighted_logit(
     design: &[f64],
     p: usize,
     treated: &[f64],
     weights: &[f64],
 ) -> Result<Vec<f64>, DrDidError> {
-    let n = treated.len();
-    let mut beta = vec![0.0; p];
-    for _ in 0..LOGIT_MAX_ITER {
-        let index = linear_index(design, p, &beta);
-        let mut gram = vec![0.0; p * p];
-        let mut rhs = vec![0.0; p];
-        for (i, row) in design.chunks_exact(p).enumerate().take(n) {
-            let mu = 1.0 / (1.0 + (-index[i]).exp());
-            let var = (mu * (1.0 - mu)).max(f64::MIN_POSITIVE);
-            let w = weights[i] * var;
-            let z = index[i] + (treated[i] - mu) / var;
-            for a in 0..p {
-                let wa = w * row[a];
-                rhs[a] += wa * z;
-                for b in 0..=a {
-                    gram[a * p + b] += wa * row[b];
-                }
-            }
-        }
-        symmetrise(&mut gram, p);
-        let next = solve_dense_system(&gram, &rhs).map_err(|_| DrDidError::SingularSystem)?;
-        let change = next
-            .iter()
-            .zip(&beta)
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0, f64::max);
-        beta = next;
-        if change < 1e-13 {
-            break;
-        }
-    }
-    Ok(beta)
+    let x = MatRef::from_row_major_slice(design, treated.len(), p);
+    fit_logit(x, treated, Some(weights), LOGIT_TOLERANCE, LOGIT_MAX_ITER)
+        .map(|fit| fit.coefficients)
+        .map_err(|_| DrDidError::SingularSystem)
 }
 
 /// A twice differentiable loss with its value, gradient and Hessian.

@@ -19,14 +19,11 @@
 //! - `HonestDiD` R package `flci.R`
 
 use crate::types::InferenceConfig;
-use faer::Mat;
 use rayon::prelude::*;
 
 use super::super::linear_algebra::{
-    cholesky_lower, critical_value_from_pointwise_confidence, dot,
-    pointwise_confidence_level_from_critical, post_covariance_block,
-    simulated_lower_cholesky_maxima_batched, simulated_lower_cholesky_maxima_scalar,
-    simulation_rank,
+    critical_value_from_pointwise_confidence, functional_covariance_matrix,
+    pointwise_confidence_level_from_critical, post_covariance_block, sup_t_critical_value,
 };
 use super::super::{
     HonestConditionalConfidenceSet, HonestEventStudyInput, HonestIdentifiedSet,
@@ -308,52 +305,6 @@ pub fn build_relative_magnitude_multi_flci_problem_with_precomputed_sets(
     })
 }
 
-fn functional_correlation_matrix(
-    input: &HonestEventStudyInput,
-    post_weight_sets: &[Vec<f64>],
-) -> Result<Vec<Vec<f64>>, String> {
-    let sigma_post = post_covariance_block(
-        &input.covariance,
-        input.num_pre_periods(),
-        input.num_post_periods(),
-    );
-    let projected = post_weight_sets
-        .iter()
-        .map(|post_weights| {
-            sigma_post
-                .iter()
-                .map(|row| dot(post_weights, row))
-                .collect::<Vec<f64>>()
-        })
-        .collect::<Vec<_>>();
-    let variances = projected
-        .iter()
-        .zip(post_weight_sets.iter())
-        .map(|(sigma_l, post_weights)| dot(post_weights, sigma_l).max(0.0))
-        .collect::<Vec<_>>();
-    if variances.iter().any(|variance| *variance <= 1e-14) {
-        return Err(
-            "one or more functionals have near-zero variance under post covariance".to_string(),
-        );
-    }
-    let stddevs = variances
-        .iter()
-        .map(|value| value.sqrt())
-        .collect::<Vec<_>>();
-    let n = post_weight_sets.len();
-    let mut corr = vec![vec![0.0; n]; n];
-    for i in 0..n {
-        corr[i][i] = 1.0;
-        for j in (i + 1)..n {
-            let cov_ij = dot(&post_weight_sets[i], &projected[j]);
-            let c = (cov_ij / (stddevs[i] * stddevs[j])).clamp(-1.0, 1.0);
-            corr[i][j] = c;
-            corr[j][i] = c;
-        }
-    }
-    Ok(corr)
-}
-
 fn simulated_joint_pointwise_confidence_level(
     input: &HonestEventStudyInput,
     confidence_level: f64,
@@ -364,35 +315,31 @@ fn simulated_joint_pointwise_confidence_level(
     if simulation_draws == 0 {
         return Err("multi FLCI simulation_draws must be positive".to_string());
     }
-    let corr = functional_correlation_matrix(input, post_weight_sets)?;
-    let chol = cholesky_lower(&corr)?;
-    let mut maxima =
-        simulated_lower_cholesky_maxima_batched(&chol, simulation_draws, simulation_seed);
-    let n = maxima.len();
-    let rank = simulation_rank(n, confidence_level);
-    maxima.select_nth_unstable_by(rank.min(n - 1), f64::total_cmp);
-    let critical = maxima[rank.min(n - 1)];
-    Ok(critical)
+    let sigma_post = post_covariance_block(
+        &input.covariance,
+        input.num_pre_periods(),
+        input.num_post_periods(),
+    );
+    let covariance = functional_covariance_matrix(
+        &sigma_post,
+        post_weight_sets,
+        "one or more functionals have near-zero variance under post covariance",
+    )?;
+    sup_t_critical_value(
+        &covariance,
+        confidence_level,
+        simulation_draws,
+        simulation_seed,
+    )
 }
 
 #[doc(hidden)]
-pub fn benchmark_multi_flci_maxima(
-    chol: &[Vec<f64>],
+pub fn benchmark_multi_flci_critical_value(
+    covariance: &[Vec<f64>],
     simulation_draws: usize,
     simulation_seed: u64,
-) -> Vec<f64> {
-    let lower = Mat::from_fn(chol.len(), chol.len(), |row, col| chol[row][col]);
-    simulated_lower_cholesky_maxima_batched(&lower, simulation_draws, simulation_seed)
-}
-
-#[doc(hidden)]
-pub fn benchmark_multi_flci_maxima_scalar(
-    chol: &[Vec<f64>],
-    simulation_draws: usize,
-    simulation_seed: u64,
-) -> Vec<f64> {
-    let lower = Mat::from_fn(chol.len(), chol.len(), |row, col| chol[row][col]);
-    simulated_lower_cholesky_maxima_scalar(&lower, simulation_draws, simulation_seed)
+) -> Result<f64, String> {
+    sup_t_critical_value(covariance, 0.95, simulation_draws, simulation_seed)
 }
 
 fn joint_pointwise_confidence_level(

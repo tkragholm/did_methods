@@ -15,18 +15,16 @@
 //!   implementation mirrors for the smoothness class.
 
 use clarabel::algebra::CscMatrix;
-use clarabel::solver::{
-    DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
-};
+use clarabel::solver::SupportedConeT;
 use rayon::prelude::*;
 
 use crate::inference::validate_confidence_level;
 use crate::types::InferenceConfig;
 
+use super::super::conic;
 use super::super::linear_algebra::{
-    cholesky_lower, critical_value_from_pointwise_confidence, dot,
-    pointwise_confidence_level_from_critical, post_covariance_block,
-    simulated_lower_cholesky_maxima_batched, simulation_rank,
+    cholesky_lower, critical_value_from_pointwise_confidence, dot, functional_covariance_matrix,
+    pointwise_confidence_level_from_critical, post_covariance_block, sup_t_critical_value,
 };
 use super::super::{
     HonestEventStudyInput, HonestIdentifiedSet, HonestJointPathConfig, HonestJointPathMethod,
@@ -222,37 +220,6 @@ fn variance_for_w(input: &HonestEventStudyInput, post_weights: &[f64], w: &[f64]
         .max(0.0)
 }
 
-/// Number of settings `socp_settings` offers: the solver's defaults, then a
-/// conservative set.
-const SOCP_SETTINGS_LADDER: usize = 2;
-
-/// Clarabel settings for the `attempt`-th try at one SOCP.
-///
-/// Attempt 0 is the solver's defaults, which every program that solves cleanly
-/// uses. Attempt 1 is for `NumericalError` and `InsufficientProgress`, which
-/// report the KKT factorisation losing accuracy on a feasible but thin cone,
-/// not infeasibility. It raises the static regularisation and the iteration
-/// budget and loosens the tolerances to `1e-6`.
-fn socp_settings(attempt: usize) -> Result<clarabel::solver::DefaultSettings<f64>, String> {
-    let mut builder = DefaultSettingsBuilder::<f64>::default();
-    builder
-        .verbose(false)
-        .presolve_enable(false)
-        .input_sparse_dropzeros(false);
-    if attempt > 0 {
-        builder
-            .static_regularization_constant(1e-6)
-            .dynamic_regularization_eps(1e-12)
-            .max_iter(1000)
-            .tol_gap_abs(1e-6)
-            .tol_gap_rel(1e-6)
-            .tol_feas(1e-6);
-    }
-    builder
-        .build()
-        .map_err(|err| format!("failed to build Clarabel settings: {err}"))
-}
-
 fn solve_socp(
     objective: &[f64],
     inequalities: &[Vec<f64>],
@@ -272,41 +239,16 @@ fn solve_socp(
         SupportedConeT::SecondOrderConeT(soc_rows.len()),
     ];
     let quadratic = CscMatrix::<f64>::zeros((objective.len(), objective.len()));
-    let mut attempt = 0;
-    loop {
-        let settings = socp_settings(attempt)?;
-        let mut solver = DefaultSolver::new(
-            &quadratic,
-            objective,
-            &constraint_matrix,
-            rhs,
-            &cones,
-            settings,
-        )
-        .map_err(|err| format!("failed to initialize smoothness SOCP solver: {err}"))?;
-        solver.solve();
-        counter.note_status(solver.solution.status);
-        match solver.solution.status {
-            SolverStatus::Solved | SolverStatus::AlmostSolved => {
-                return Ok(Some(SmoothnessSocpSolution {
-                    solution: solver.solution.x,
-                }));
-            }
-            SolverStatus::PrimalInfeasible
-            | SolverStatus::DualInfeasible
-            | SolverStatus::AlmostPrimalInfeasible
-            | SolverStatus::AlmostDualInfeasible => return Ok(None),
-            status => {
-                attempt += 1;
-                if attempt >= SOCP_SETTINGS_LADDER {
-                    return Err(format!(
-                        "Clarabel failed to solve smoothness SOCP: {status:?}"
-                    ));
-                }
-                counter.note_retry();
-            }
-        }
-    }
+    Ok(conic::solve(
+        "smoothness SOCP",
+        &quadratic,
+        objective,
+        &constraint_matrix,
+        rhs,
+        &cones,
+        counter,
+    )?
+    .map(|solution| SmoothnessSocpSolution { solution }))
 }
 
 fn find_lowest_h(
@@ -718,52 +660,6 @@ pub(in crate::inference::sensitivity) fn build_smoothness_multi_flci_problem_cou
     })
 }
 
-fn functional_correlation_matrix(
-    input: &HonestEventStudyInput,
-    post_weight_sets: &[Vec<f64>],
-) -> Result<Vec<Vec<f64>>, String> {
-    let sigma_post = post_covariance_block(
-        &input.covariance,
-        input.num_pre_periods(),
-        input.num_post_periods(),
-    );
-    let projected = post_weight_sets
-        .iter()
-        .map(|post_weights| {
-            sigma_post
-                .iter()
-                .map(|row| dot(post_weights, row))
-                .collect::<Vec<f64>>()
-        })
-        .collect::<Vec<_>>();
-    let variances = projected
-        .iter()
-        .zip(post_weight_sets.iter())
-        .map(|(sigma_l, post_weights)| dot(post_weights, sigma_l).max(0.0))
-        .collect::<Vec<_>>();
-    if variances.iter().any(|variance| *variance <= 1e-14) {
-        return Err(
-            "one or more functionals have near-zero variance under post covariance".to_string(),
-        );
-    }
-    let stddevs = variances
-        .iter()
-        .map(|value| value.sqrt())
-        .collect::<Vec<_>>();
-    let n = post_weight_sets.len();
-    let mut corr = vec![vec![0.0; n]; n];
-    for i in 0..n {
-        corr[i][i] = 1.0;
-        for j in (i + 1)..n {
-            let cov_ij = dot(&post_weight_sets[i], &projected[j]);
-            let c = (cov_ij / (stddevs[i] * stddevs[j])).clamp(-1.0, 1.0);
-            corr[i][j] = c;
-            corr[j][i] = c;
-        }
-    }
-    Ok(corr)
-}
-
 fn simulated_joint_pointwise_confidence_level(
     input: &HonestEventStudyInput,
     confidence_level: f64,
@@ -771,14 +667,22 @@ fn simulated_joint_pointwise_confidence_level(
     simulation_draws: usize,
     simulation_seed: u64,
 ) -> Result<f64, String> {
-    let corr = functional_correlation_matrix(input, post_weight_sets)?;
-    let chol = cholesky_lower(&corr)?;
-    let mut maxima =
-        simulated_lower_cholesky_maxima_batched(&chol, simulation_draws, simulation_seed);
-    let n = maxima.len();
-    let rank = simulation_rank(n, confidence_level);
-    maxima.select_nth_unstable_by(rank.min(n - 1), f64::total_cmp);
-    Ok(maxima[rank.min(n - 1)])
+    let sigma_post = post_covariance_block(
+        &input.covariance,
+        input.num_pre_periods(),
+        input.num_post_periods(),
+    );
+    let covariance = functional_covariance_matrix(
+        &sigma_post,
+        post_weight_sets,
+        "one or more functionals have near-zero variance under post covariance",
+    )?;
+    sup_t_critical_value(
+        &covariance,
+        confidence_level,
+        simulation_draws,
+        simulation_seed,
+    )
 }
 
 fn joint_pointwise_confidence_level(

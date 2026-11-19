@@ -24,14 +24,7 @@ impl PropensityEstimator for LogisticPS {
     ) -> Result<Params, InternalDidError> {
         // The maximum-likelihood logit by IRLS (Fisher scoring), the fit R's
         // DRDID uses through glm wherever it does not calibrate.
-        let beta = irls(
-            design,
-            target,
-            self.cfg.max_iter,
-            self.cfg.tol,
-            self.cfg.min_weight,
-        )
-        .map_err(|irls_err| {
+        let beta = irls(design, target, self.cfg.max_iter, self.cfg.tol).map_err(|irls_err| {
             InternalDidError::Convergence(format!("logistic propensity fit failed: {irls_err}"))
         })?;
         Ok(Params { beta })

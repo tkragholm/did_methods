@@ -26,7 +26,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::inference::z_score_for_confidence;
+use epistat_inference::Clusters;
+
+use crate::inference::normal_interval;
 use crate::types::{AttGtEstimate, InferenceConfig};
 use crate::util::usize_to_f64;
 
@@ -163,19 +165,8 @@ impl UnitPanel {
         match self.clusters {
             None => ((0..self.groups.len()).collect(), self.groups.len()),
             Some(ref labels) => {
-                let mut distinct = labels.clone();
-                distinct.sort_unstable();
-                distinct.dedup();
-                let position = distinct
-                    .iter()
-                    .enumerate()
-                    .map(|(index, label)| (*label, index))
-                    .collect::<BTreeMap<i64, usize>>();
-                let assignments = labels
-                    .iter()
-                    .map(|label| position[label])
-                    .collect::<Vec<usize>>();
-                (assignments, distinct.len())
+                let numbered = Clusters::from_sorted_labels(labels);
+                (numbered.of().to_vec(), numbered.count())
             }
         }
     }
@@ -337,17 +328,18 @@ fn finish(
     key: i32,
     att: f64,
     influence: Vec<f64>,
-    z: f64,
+    confidence_level: f64,
     assignments: &[usize],
     n_clusters: usize,
 ) -> AggteEstimate {
     let se = standard_error(&influence, assignments, n_clusters);
+    let (ci_low, ci_high) = normal_interval(att, se, confidence_level);
     AggteEstimate {
         key,
         att,
         se,
-        ci_low: att - z * se,
-        ci_high: att + z * se,
+        ci_low,
+        ci_high,
         influence,
     }
 }
@@ -393,7 +385,7 @@ pub fn aggregate_att_gt(
         });
     }
 
-    let z = z_score_for_confidence(config.confidence_level.confidence_level);
+    let confidence_level = config.confidence_level.confidence_level;
     let (assignments, n_clusters) = panel.cluster_index();
     if assignments.len() != n_units {
         return Err(AggteError::UnitGroupMismatch {
@@ -411,7 +403,14 @@ pub fn aggregate_att_gt(
                 return Err(AggteError::NoPostTreatmentCells);
             }
             let (att, influence_vector) = combine_by_share(&post, estimates, influence, panel);
-            let summary = finish(0, att, influence_vector, z, &assignments, n_clusters);
+            let summary = finish(
+                0,
+                att,
+                influence_vector,
+                confidence_level,
+                &assignments,
+                n_clusters,
+            );
             Ok(AggteResult {
                 overall_att: summary.att,
                 overall_se: summary.se,
@@ -458,7 +457,14 @@ pub fn aggregate_att_gt(
                 .into_iter()
                 .map(|(event_time, cells)| {
                     let (att, vector) = combine_by_share(&cells, estimates, influence, panel);
-                    finish(event_time, att, vector, z, &assignments, n_clusters)
+                    finish(
+                        event_time,
+                        att,
+                        vector,
+                        confidence_level,
+                        &assignments,
+                        n_clusters,
+                    )
                 })
                 .collect::<Vec<_>>();
 
@@ -471,7 +477,7 @@ pub fn aggregate_att_gt(
                 0,
                 overall_att,
                 overall_influence,
-                z,
+                confidence_level,
                 &assignments,
                 n_clusters,
             );
@@ -501,7 +507,14 @@ pub fn aggregate_att_gt(
                 .into_iter()
                 .map(|(group, cells)| {
                     let (att, vector) = combine_equally(&cells, estimates, influence, n_units);
-                    finish(group, att, vector, z, &assignments, n_clusters)
+                    finish(
+                        group,
+                        att,
+                        vector,
+                        confidence_level,
+                        &assignments,
+                        n_clusters,
+                    )
                 })
                 .collect::<Vec<_>>();
 
@@ -540,7 +553,7 @@ pub fn aggregate_att_gt(
                 0,
                 overall_att,
                 overall_influence,
-                z,
+                confidence_level,
                 &assignments,
                 n_clusters,
             );
@@ -568,7 +581,14 @@ pub fn aggregate_att_gt(
                 .into_iter()
                 .map(|(time, cells)| {
                     let (att, vector) = combine_by_share(&cells, estimates, influence, panel);
-                    finish(time, att, vector, z, &assignments, n_clusters)
+                    finish(
+                        time,
+                        att,
+                        vector,
+                        confidence_level,
+                        &assignments,
+                        n_clusters,
+                    )
                 })
                 .collect::<Vec<_>>();
 
@@ -578,7 +598,7 @@ pub fn aggregate_att_gt(
                 0,
                 overall_att,
                 overall_influence,
-                z,
+                confidence_level,
                 &assignments,
                 n_clusters,
             );
@@ -653,17 +673,16 @@ pub fn att_gt_clustered_standard_errors(
         });
     }
 
-    let z = z_score_for_confidence(inference.confidence_level);
     Ok(estimates
         .iter()
         .zip(influence)
         .map(|(estimate, vector)| {
             let se = standard_error(vector, &assignments, n_clusters);
-            let margin = z * se;
+            let (ci_low, ci_high) = normal_interval(estimate.att, se, inference.confidence_level);
             AttGtEstimate {
                 se,
-                ci_low: estimate.att - margin,
-                ci_high: estimate.att + margin,
+                ci_low,
+                ci_high,
                 ..*estimate
             }
         })

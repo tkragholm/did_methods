@@ -23,9 +23,7 @@
 pub mod least_favorable_intervals;
 
 use clarabel::algebra::CscMatrix;
-use clarabel::solver::{
-    DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
-};
+use clarabel::solver::SupportedConeT;
 
 use self::least_favorable_intervals::SmoothnessFlciConfig;
 #[cfg(test)]
@@ -37,6 +35,7 @@ use super::conditional_confidence_sets::{
     ConditionalMomentLpWorkspace, DualMaxLpWorkspace, compute_least_favorable_cv,
     dual_acceptance_region,
 };
+use super::conic::ConicWorkspace;
 use super::linear_algebra::{
     build_clarabel_matrix, diag_sqrt, dot, linear_grid, mat_vec_mul_into, sandwich_covariance,
     solve_square_linear_system, truncated_normal_quantile,
@@ -421,9 +420,8 @@ fn create_pre_period_equality_matrix(
 }
 
 struct SmoothnessLpWorkspace {
-    solver: DefaultSolver<f64>,
+    program: ConicWorkspace,
     objective: Vec<f64>,
-    current_q: Vec<f64>,
 }
 
 impl SmoothnessLpWorkspace {
@@ -439,25 +437,16 @@ impl SmoothnessLpWorkspace {
             SupportedConeT::NonnegativeConeT(inequalities.len()),
             SupportedConeT::ZeroConeT(equalities.len()),
         ];
-        let settings = DefaultSettingsBuilder::<f64>::default()
-            .verbose(false)
-            .presolve_enable(false)
-            .input_sparse_dropzeros(false)
-            .build()
-            .map_err(|err| format!("failed to build Clarabel settings: {err}"))?;
-        let solver = DefaultSolver::new(
-            quadratic,
-            objective,
-            &constraint_matrix,
-            rhs,
-            &cones,
-            settings,
-        )
-        .map_err(|err| format!("failed to initialize smoothness LP solver: {err}"))?;
         Ok(Self {
-            solver,
+            program: ConicWorkspace::new(
+                "smoothness LP",
+                quadratic,
+                &constraint_matrix,
+                rhs,
+                &cones,
+                objective,
+            )?,
             objective: objective.to_vec(),
-            current_q: objective.to_vec(),
         })
     }
 
@@ -466,29 +455,13 @@ impl SmoothnessLpWorkspace {
         q: &[f64],
         counter: &crate::inference::sensitivity::SolverCounter,
     ) -> Result<Option<f64>, String> {
-        self.current_q.clear();
-        self.current_q.extend_from_slice(q);
-        self.solver
-            .update_q(&self.current_q)
-            .map_err(|err| format!("failed to update smoothness LP objective: {err}"))?;
-        self.solver.solve();
-        counter.note_status(self.solver.solution.status);
-        match self.solver.solution.status {
-            SolverStatus::Solved | SolverStatus::AlmostSolved => Ok(Some(
-                self.objective
-                    .iter()
-                    .zip(self.solver.solution.x.iter())
-                    .map(|(left, right)| left * right)
-                    .sum::<f64>(),
-            )),
-            SolverStatus::PrimalInfeasible
-            | SolverStatus::DualInfeasible
-            | SolverStatus::AlmostPrimalInfeasible
-            | SolverStatus::AlmostDualInfeasible => Ok(None),
-            status => Err(format!(
-                "Clarabel failed to solve smoothness LP: {status:?}"
-            )),
-        }
+        Ok(self.program.solve_with_q(q, counter)?.map(|solution| {
+            self.objective
+                .iter()
+                .zip(solution)
+                .map(|(left, right)| left * right)
+                .sum::<f64>()
+        }))
     }
 }
 

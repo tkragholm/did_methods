@@ -19,8 +19,8 @@ use crate::estimators::propensity::types::{
     Config as PropensityConfig, MultinomialPropensityEstimator, PropensityEstimator,
 };
 use crate::inference::{
-    multiplier_bootstrap_ci, standard_error_from_influence, validate_confidence_level,
-    z_score_for_confidence,
+    multiplier_bootstrap_ci, normal_interval, standard_error_from_influence,
+    validate_confidence_level,
 };
 use crate::methods::drdid::moments::normalize_weights_to_n;
 use crate::types::{
@@ -846,8 +846,7 @@ fn build_did_cc_estimate(
             config.drdid.bootstrap(),
         )
     } else {
-        let margin = z_score_for_confidence(config.drdid.confidence_level) * se;
-        (att - margin, att + margin)
+        normal_interval(att, se, config.drdid.confidence_level)
     };
 
     DidCcEstimate {

@@ -33,6 +33,7 @@
 //!   THAT regression's own fitted values, not the period-combined control
 //!   prediction used in the `eta` terms.
 
+use epistat_linalg::weighted_gram;
 use faer::Mat;
 
 use crate::estimators::common::linalg::solve_spd_system_multi_rhs;
@@ -102,16 +103,12 @@ fn weighted_regression(
     let predictions = model.predict(design.as_ref(), coefficients.as_ref());
 
     // X' diag(w) X / n, over the full sample because w is zero outside the subset.
+    let gram_matrix =
+        weighted_gram(design.as_ref(), weights).map_err(|_| DrDidError::SingularSystem)?;
     let mut gram = vec![0.0; k * k];
-    for (row, &weight) in weights.iter().enumerate().take(n) {
-        if weight == 0.0 {
-            continue;
-        }
-        for i in 0..k {
-            let xi = *design.get(row, i) * weight;
-            for j in 0..k {
-                gram[i * k + j] += xi * *design.get(row, j);
-            }
+    for i in 0..k {
+        for j in 0..k {
+            gram[i * k + j] = gram_matrix[(i, j)];
         }
     }
     for value in &mut gram {

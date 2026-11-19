@@ -18,11 +18,8 @@
 use epistat_rng::{Stream, replicate_seed};
 use rayon::prelude::*;
 
-use super::super::linear_algebra::{
-    cholesky_lower, draw_standard_normal_vec_into, lower_mat_vec_mul_into,
-};
+use super::super::linear_algebra::{cholesky_lower, lower_mat_vec_mul_into};
 use super::ConditionalMomentLpWorkspace;
-use crate::util::usize_to_f64;
 
 /// Draw count above which the simulation splits across rayon.
 ///
@@ -119,7 +116,7 @@ pub(in crate::inference::sensitivity) fn simulation_draws(
                 || (vec![0.0; dim], vec![0.0; dim]),
                 |(z, xi), (draw_idx, y)| {
                     let mut rng = Stream::seeded(replicate_seed(seed, draw_idx as u64));
-                    draw_standard_normal_vec_into(&mut rng, z);
+                    rng.fill_normals(z);
                     lower_mat_vec_mul_into(&chol, z, xi);
                     y.iter_mut().zip(xi.iter()).for_each(|(y_value, xi_value)| {
                         *y_value = -*xi_value;
@@ -131,7 +128,7 @@ pub(in crate::inference::sensitivity) fn simulation_draws(
         let mut xi = vec![0.0; dim];
         let mut rng = Stream::seeded(seed);
         for y in draws.chunks_exact_mut(dim) {
-            draw_standard_normal_vec_into(&mut rng, &mut z);
+            rng.fill_normals(&mut z);
             lower_mat_vec_mul_into(&chol, &z, &mut xi);
             y.iter_mut().zip(xi.iter()).for_each(|(y_value, xi_value)| {
                 *y_value = -*xi_value;
@@ -203,13 +200,7 @@ pub(in crate::inference::sensitivity) fn compute_least_favorable_cv_from_draws(
         ));
     }
     let p = (1.0 - hybrid_kappa).clamp(0.0, 1.0);
-    let last_index = etas.len().saturating_sub(1);
-    let target_rank = (usize_to_f64(last_index) * p).round();
-    let idx = (0..=last_index)
-        .find(|candidate| usize_to_f64(*candidate) >= target_rank)
-        .unwrap_or(last_index);
-    etas.select_nth_unstable_by(idx, f64::total_cmp);
-    etas.get(idx)
-        .copied()
+    etas.sort_by(f64::total_cmp);
+    epistat_stats::quantile::rounded_rank(&etas, p)
         .ok_or_else(|| "failed to compute least-favorable critical value".to_string())
 }

@@ -1,13 +1,11 @@
 use clarabel::algebra::CscMatrix;
 use dyn_stack::{MemBuffer, MemStack};
-use epistat_rng::{Stream, replicate_seed};
 use epistat_stats::normal;
 use faer::linalg::cholesky::llt;
 use faer::linalg::cholesky::llt::factor::LltRegularization;
 use faer::linalg::matmul::matmul;
 use faer::prelude::Solve;
 use faer::{Accum, Mat, MatMut, MatRef, Par, Side, Spec};
-use rayon::prelude::*;
 
 use crate::util::usize_to_f64;
 
@@ -152,12 +150,6 @@ fn try_dense_cholesky_with_diagonal_jitter(
     None
 }
 
-pub(super) fn draw_standard_normal_vec(rng: &mut Stream, len: usize) -> Vec<f64> {
-    let mut out = vec![0.0; len];
-    draw_standard_normal_vec_into(rng, &mut out);
-    out
-}
-
 pub(super) fn lower_mat_vec_mul_into(lower: &Mat<f64>, vec: &[f64], out: &mut [f64]) {
     debug_assert_eq!(lower.nrows(), out.len());
     debug_assert_eq!(lower.ncols(), vec.len());
@@ -183,15 +175,6 @@ pub(super) fn lower_mat_vec_mul_into(lower: &Mat<f64>, vec: &[f64], out: &mut [f
     }
 }
 
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss
-)]
-pub(super) fn simulation_rank(sample_count: usize, confidence_level: f64) -> usize {
-    (usize_to_f64(sample_count.saturating_sub(1)) * confidence_level).round() as usize
-}
-
 pub(super) fn pointwise_confidence_level_from_critical(critical: f64) -> Result<f64, String> {
     Ok((2.0 * normal::cdf(critical) - 1.0).clamp(1e-12, 1.0 - 1e-12))
 }
@@ -200,90 +183,64 @@ pub(super) fn critical_value_from_pointwise_confidence(pointwise: f64) -> Result
     Ok(normal::quantile((1.0 + pointwise) * 0.5))
 }
 
-const SENSITIVITY_BATCHED_CHUNK_SIZE: usize = 64;
-
-pub(super) fn simulated_lower_cholesky_maxima_batched(
-    chol: &Mat<f64>,
+/// The sup-t critical value of the estimator whose covariance is `covariance`,
+/// for a joint confidence level of `confidence_level`.
+pub(super) fn sup_t_critical_value(
+    covariance: &[Vec<f64>],
+    confidence_level: f64,
     simulation_draws: usize,
     simulation_seed: u64,
-) -> Vec<f64> {
-    let dim = chol.nrows();
-    if dim < 16 || simulation_draws < 64 {
-        return simulated_lower_cholesky_maxima_scalar(chol, simulation_draws, simulation_seed);
+) -> Result<f64, String> {
+    let dim = covariance.len();
+    if covariance.iter().any(|row| row.len() != dim) {
+        return Err("covariance matrix must be square".to_string());
     }
-
-    let mut maxima = vec![0.0; simulation_draws];
-    let full_draws = simulation_draws - (simulation_draws % SENSITIVITY_BATCHED_CHUNK_SIZE);
-    maxima[..full_draws]
-        .par_chunks_mut(SENSITIVITY_BATCHED_CHUNK_SIZE)
-        .enumerate()
-        .for_each_init(
-            || {
-                (
-                    Mat::<f64>::zeros(dim, SENSITIVITY_BATCHED_CHUNK_SIZE),
-                    Mat::<f64>::zeros(dim, SENSITIVITY_BATCHED_CHUNK_SIZE),
-                    vec![0.0; dim],
-                )
-            },
-            |(z, draws, draw_vec), (chunk_idx, chunk_out)| {
-                let start = chunk_idx * SENSITIVITY_BATCHED_CHUNK_SIZE;
-                for local_idx in 0..SENSITIVITY_BATCHED_CHUNK_SIZE {
-                    let draw_idx = start + local_idx;
-                    let mut rng = Stream::seeded(replicate_seed(simulation_seed, draw_idx as u64));
-                    draw_standard_normal_vec_into(&mut rng, draw_vec);
-                    for row in 0..dim {
-                        z[(row, local_idx)] = draw_vec[row];
-                    }
-                }
-                matmul(
-                    draws.as_mut(),
-                    Accum::Replace,
-                    chol.as_ref(),
-                    z.as_ref(),
-                    1.0,
-                    Par::Seq,
-                );
-                for local_idx in 0..SENSITIVITY_BATCHED_CHUNK_SIZE {
-                    chunk_out[local_idx] = (0..dim)
-                        .map(|row| draws[(row, local_idx)].abs())
-                        .fold(0.0, f64::max);
-                }
-            },
-        );
-
-    let tail_start = full_draws;
-    if tail_start < simulation_draws {
-        let mut z = vec![0.0; dim];
-        let mut draw = vec![0.0; dim];
-        for (local_idx, out) in maxima[tail_start..].iter_mut().enumerate() {
-            let draw_idx = tail_start + local_idx;
-            let mut rng = Stream::seeded(replicate_seed(simulation_seed, draw_idx as u64));
-            draw_standard_normal_vec_into(&mut rng, &mut z);
-            lower_mat_vec_mul_into(chol, &z, &mut draw);
-            *out = draw.iter().map(|value| value.abs()).fold(0.0, f64::max);
-        }
-    }
-    maxima
+    let matrix = Mat::from_fn(dim, dim, |row, col| covariance[row][col]);
+    epistat_inference::simultaneous::sup_t_from_covariance(
+        matrix.as_ref(),
+        1.0 - confidence_level,
+        simulation_draws,
+        simulation_seed,
+    )
+    .map_err(|error| format!("sup-t critical value: {error}"))
 }
 
-pub(super) fn simulated_lower_cholesky_maxima_scalar(
-    chol: &Mat<f64>,
-    simulation_draws: usize,
-    simulation_seed: u64,
-) -> Vec<f64> {
-    let dim = chol.nrows();
-    (0..simulation_draws)
-        .into_par_iter()
-        .map_init(
-            || (vec![0.0; dim], vec![0.0; dim]),
-            |(z, draw), draw_idx| {
-                let mut rng = Stream::seeded(replicate_seed(simulation_seed, draw_idx as u64));
-                draw_standard_normal_vec_into(&mut rng, z);
-                lower_mat_vec_mul_into(chol, z, draw);
-                draw.iter().map(|value| value.abs()).fold(0.0, f64::max)
-            },
-        )
-        .collect()
+/// Covariance of the linear functionals `weights[i]' beta` of an estimator
+/// whose covariance is `covariance`. Fails with `message` when a functional
+/// has a variance that is not above `1e-14`.
+pub(super) fn functional_covariance_matrix(
+    covariance: &[Vec<f64>],
+    weight_sets: &[Vec<f64>],
+    message: &str,
+) -> Result<Vec<Vec<f64>>, String> {
+    let projected = weight_sets
+        .iter()
+        .map(|weights| {
+            covariance
+                .iter()
+                .map(|row| dot(weights, row))
+                .collect::<Vec<f64>>()
+        })
+        .collect::<Vec<_>>();
+    let variances = projected
+        .iter()
+        .zip(weight_sets.iter())
+        .map(|(projection, weights)| dot(weights, projection).max(0.0))
+        .collect::<Vec<_>>();
+    if variances.iter().any(|variance| *variance <= 1e-14) {
+        return Err(message.to_string());
+    }
+    let count = weight_sets.len();
+    let mut result = vec![vec![0.0; count]; count];
+    for i in 0..count {
+        result[i][i] = variances[i];
+        for j in (i + 1)..count {
+            let value = dot(&weight_sets[i], &projected[j]);
+            result[i][j] = value;
+            result[j][i] = value;
+        }
+    }
+    Ok(result)
 }
 
 pub(super) fn post_covariance_block(
@@ -298,38 +255,6 @@ pub(super) fn post_covariance_block(
                 .collect()
         })
         .collect()
-}
-
-pub(super) fn draw_standard_normal_vec_into(rng: &mut Stream, out: &mut [f64]) {
-    draw_standard_normal_vec_into_cached(rng, out);
-}
-
-fn draw_standard_normal(rng: &mut Stream) -> f64 {
-    let u1 = rng.uniform().max(f64::MIN_POSITIVE);
-    let u2 = rng.uniform();
-    (-2.0_f64 * u1.ln()).sqrt() * (2.0_f64 * std::f64::consts::PI * u2).cos()
-}
-
-pub(super) fn draw_standard_normal_vec_into_scalar(rng: &mut Stream, out: &mut [f64]) {
-    for value in out {
-        *value = draw_standard_normal(rng);
-    }
-}
-
-pub(super) fn draw_standard_normal_vec_into_cached(rng: &mut Stream, out: &mut [f64]) {
-    let mut index = 0usize;
-    while index + 1 < out.len() {
-        let u1 = rng.uniform().max(f64::MIN_POSITIVE);
-        let u2 = rng.uniform();
-        let radius = (-2.0_f64 * u1.ln()).sqrt();
-        let theta = 2.0_f64 * std::f64::consts::PI * u2;
-        out[index] = radius * theta.cos();
-        out[index + 1] = radius * theta.sin();
-        index += 2;
-    }
-    if index < out.len() {
-        out[index] = draw_standard_normal(rng);
-    }
 }
 
 pub(super) fn solve_square_linear_system(
@@ -712,11 +637,7 @@ pub(super) fn truncated_normal_quantile(p: f64, l: f64, u: f64) -> Result<f64, S
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        draw_standard_normal_vec_into_cached, draw_standard_normal_vec_into_scalar,
-        truncated_normal_quantile,
-    };
-    use epistat_rng::Stream;
+    use super::truncated_normal_quantile;
 
     #[test]
     fn truncated_quantile_follows_norminvp_on_degenerate_and_empty_intervals() {
@@ -725,40 +646,5 @@ mod tests {
         assert!(truncated_normal_quantile(0.9, 1.0, 0.0).is_err());
         assert!(truncated_normal_quantile(0.9, f64::NAN, 1.0).is_err());
         assert!(truncated_normal_quantile(1.5, 0.0, 1.0).is_err());
-    }
-
-    fn mean_and_variance(sample: &[f64]) -> (f64, f64) {
-        let n = crate::util::usize_to_f64(sample.len());
-        let mean = sample.iter().sum::<f64>() / n;
-        let var = sample
-            .iter()
-            .map(|v| {
-                let d = *v - mean;
-                d * d
-            })
-            .sum::<f64>()
-            / n;
-        (mean, var)
-    }
-
-    #[test]
-    fn cached_and_scalar_normal_draws_are_statistically_consistent() {
-        let seed = 42_042_u64;
-        let len = 20_001usize;
-
-        let mut scalar_rng = Stream::seeded(seed);
-        let mut scalar = vec![0.0; len];
-        draw_standard_normal_vec_into_scalar(&mut scalar_rng, &mut scalar);
-        let (scalar_mean, scalar_var) = mean_and_variance(&scalar);
-
-        let mut cached_rng = Stream::seeded(seed);
-        let mut cached = vec![0.0; len];
-        draw_standard_normal_vec_into_cached(&mut cached_rng, &mut cached);
-        let (cached_mean, cached_var) = mean_and_variance(&cached);
-
-        assert!((scalar_mean - cached_mean).abs() < 0.03);
-        assert!((scalar_var - cached_var).abs() < 0.05);
-        assert!(cached_mean.abs() < 0.03);
-        assert!((cached_var - 1.0).abs() < 0.05);
     }
 }

@@ -524,16 +524,14 @@ impl ValidatedInferenceDataset {
 
         // Update clustered SEs immediately if clustering is requested
         if let Some(ref ci) = res.cluster_index {
-            let z = crate::inference::z_score_for_confidence(config.confidence_level);
             for (idx, est) in res.estimates.iter_mut().enumerate() {
                 if let Ok(clustered_se) = crate::inference::clustered_standard_error_from_index(
                     &res.influence_functions[idx],
                     ci,
                 ) {
                     est.se = clustered_se;
-                    let margin = z * est.se;
-                    est.ci_low = est.att - margin;
-                    est.ci_high = est.att + margin;
+                    (est.ci_low, est.ci_high) =
+                        crate::inference::normal_interval(est.att, est.se, config.confidence_level);
                 }
             }
         }

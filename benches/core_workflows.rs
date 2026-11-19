@@ -5,9 +5,8 @@ use criterion::{
     measurement::WallTime,
 };
 use did_methods::inference::sensitivity::{
-    benchmark_sensitivity_matrix_rank, benchmark_sensitivity_multi_flci_maxima,
-    benchmark_sensitivity_multi_flci_maxima_scalar, benchmark_sensitivity_normal_draws,
-    benchmark_sensitivity_normal_draws_scalar, benchmark_sensitivity_rref_pivot_columns,
+    benchmark_sensitivity_matrix_rank, benchmark_sensitivity_multi_flci_critical_value,
+    benchmark_sensitivity_normal_draws, benchmark_sensitivity_rref_pivot_columns,
     benchmark_sensitivity_sandwich_covariance,
 };
 use did_methods::inference::{
@@ -1146,12 +1145,6 @@ fn bench_sensitivity_normal_draws(criterion: &mut Criterion) {
                 std::hint::black_box(out);
             });
         });
-        group.bench_function(format!("scalar_ref/len{len}"), |bencher| {
-            bencher.iter(|| {
-                let out = benchmark_sensitivity_normal_draws_scalar(len, 27_019);
-                std::hint::black_box(out);
-            });
-        });
     }
     group.finish();
 }
@@ -1348,8 +1341,8 @@ fn bench_sensitivity_rref_pivot_columns(criterion: &mut Criterion) {
     group.finish();
 }
 
-fn bench_sensitivity_multi_flci_maxima(criterion: &mut Criterion) {
-    let mut group = criterion.benchmark_group("sensitivity_multi_flci_maxima");
+fn bench_sensitivity_multi_flci_critical_value(criterion: &mut Criterion) {
+    let mut group = criterion.benchmark_group("sensitivity_multi_flci_critical_value");
     for (dim, draws) in [(8usize, 64usize), (16, 64), (32, 128), (32, 512)] {
         let chol = (0..dim)
             .map(|row| {
@@ -1362,18 +1355,24 @@ fn bench_sensitivity_multi_flci_maxima(criterion: &mut Criterion) {
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
+        let covariance = (0..dim)
+            .map(|row| {
+                (0..dim)
+                    .map(|col| {
+                        (0..=row.min(col))
+                            .map(|inner| chol[row][inner] * chol[col][inner])
+                            .sum::<f64>()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
         group.throughput(Throughput::Elements(
             u64::try_from(dim * draws).expect("dim*draws fits u64"),
         ));
         group.bench_function(format!("current/dim{dim}_draws{draws}"), |bencher| {
             bencher.iter(|| {
-                let out = benchmark_sensitivity_multi_flci_maxima(&chol, draws, 31_415);
-                std::hint::black_box(out);
-            });
-        });
-        group.bench_function(format!("scalar_ref/dim{dim}_draws{draws}"), |bencher| {
-            bencher.iter(|| {
-                let out = benchmark_sensitivity_multi_flci_maxima_scalar(&chol, draws, 31_415);
+                let out =
+                    benchmark_sensitivity_multi_flci_critical_value(&covariance, draws, 31_415);
                 std::hint::black_box(out);
             });
         });
@@ -1405,6 +1404,6 @@ criterion_group!(
     bench_sensitivity_matrix_rank,
     bench_sensitivity_sandwich_covariance,
     bench_sensitivity_rref_pivot_columns,
-    bench_sensitivity_multi_flci_maxima
+    bench_sensitivity_multi_flci_critical_value
 );
 criterion_main!(benches);

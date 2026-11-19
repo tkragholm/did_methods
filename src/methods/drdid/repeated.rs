@@ -446,12 +446,6 @@ mod tests {
         }
     }
 
-    fn draw_standard_normal(rng: &mut Stream) -> f64 {
-        let u1 = rng.uniform().max(f64::MIN_POSITIVE);
-        let u2 = rng.uniform();
-        (-2.0_f64 * u1.ln()).sqrt() * (2.0_f64 * std::f64::consts::PI * u2).cos()
-    }
-
     fn logistic(v: f64) -> f64 {
         1.0 / (1.0 + (-v).exp())
     }
@@ -464,10 +458,10 @@ mod tests {
         let mut rows = Vec::with_capacity(2 * n_per_period);
         for post_period in [false, true] {
             for _ in 0..n_per_period {
-                let x = draw_standard_normal(rng);
+                let x = rng.normal();
                 let p_treat = logistic(0.5f64.mul_add(x, -0.3)).clamp(0.05, 0.95);
                 let treated = rng.uniform() < p_treat;
-                let noise = draw_standard_normal(rng);
+                let noise = rng.normal();
                 let time_trend = if post_period { 0.75 } else { 0.0 };
                 let treatment_effect = if treated && post_period {
                     true_att

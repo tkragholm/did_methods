@@ -28,7 +28,7 @@ use super::{
         compute_relative_magnitude_confidence_set_with_precomputed_sets,
     },
 };
-use crate::inference::z_score_for_confidence;
+use crate::inference::normal_interval;
 use crate::util::usize_to_f64;
 
 pub use regions::{
@@ -109,9 +109,8 @@ pub fn compute_honest_ci_scalar(
     };
 
     let se = target_estimate.se;
-    let z = z_score_for_confidence(inference.confidence_level);
-    let robust_lower = z.mul_add(-se, identified_lower);
-    let robust_upper = z.mul_add(se, identified_upper);
+    let robust_lower = normal_interval(identified_lower, se, inference.confidence_level).0;
+    let robust_upper = normal_interval(identified_upper, se, inference.confidence_level).1;
 
     Ok(HonestResult {
         original_estimate: target_estimate.att,

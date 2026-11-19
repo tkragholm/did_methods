@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use crate::inference::z_score_for_confidence;
+use crate::inference::normal_interval;
 use crate::types::{
     AttGtConfig, AttGtError, AttGtEstimate, AttGtObservation, BasePeriod, ComparisonGroup,
     InferenceConfig,
@@ -54,9 +54,8 @@ fn diff_in_diff(
         + (control_pre.variance() / control_pre.effective_n())
         + (control_post.variance() / control_post.effective_n()))
     .sqrt();
-    let z = z_score_for_confidence(confidence.confidence_level);
-    let margin = z * se;
-    (att, se, att - margin, att + margin)
+    let (ci_low, ci_high) = normal_interval(att, se, confidence.confidence_level);
+    (att, se, ci_low, ci_high)
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -108,13 +107,12 @@ fn weighted_diff_in_diff_panel(
     let se = ((treated.variance() / treated.effective_n())
         + (control.variance() / control.effective_n()))
     .sqrt();
-    let z = z_score_for_confidence(confidence.confidence_level);
-    let margin = z * se;
+    let (ci_low, ci_high) = normal_interval(att, se, confidence.confidence_level);
     (
         att,
         se,
-        att - margin,
-        att + margin,
+        ci_low,
+        ci_high,
         treated.observations,
         control.observations,
         treated.weight + control.weight,

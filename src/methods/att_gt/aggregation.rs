@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::inference::{validate_confidence_level, z_score_for_confidence};
+use crate::inference::{normal_interval, validate_confidence_level};
 use crate::types::{
     AttGtAggregatedEstimate, AttGtAggregationConfig, AttGtAggregationError,
     AttGtAggregationWeighting, AttGtCalendarEstimate, AttGtCohortEstimate, AttGtEstimate,
@@ -60,7 +60,6 @@ pub fn aggregate_att_gt_event_time_with_influence(
         grouped.entry(estimate.event_time).or_default().push(idx);
     }
 
-    let z = z_score_for_confidence(config.confidence_level.confidence_level);
     let mut aggregated_estimates = Vec::with_capacity(grouped.len());
     let mut aggregated_influence = Vec::with_capacity(grouped.len());
     for (event_time, bucket) in grouped {
@@ -88,14 +87,15 @@ pub fn aggregate_att_gt_event_time_with_influence(
         // correlated, which is the ordinary case. The influence vectors were
         // being carried alongside for exactly this and were not being used.
         let se = crate::inference::standard_error_from_influence(&total_influence);
-        let margin = z * se;
+        let (ci_low, ci_high) =
+            normal_interval(estimate, se, config.confidence_level.confidence_level);
         aggregated_estimates.push(AttGtEventTimeEstimate {
             event_time,
             summary: AttGtAggregatedEstimate {
                 estimate,
                 se,
-                ci_low: estimate - margin,
-                ci_high: estimate + margin,
+                ci_low,
+                ci_high,
                 components: component_count,
                 total_weight,
             },
@@ -172,7 +172,6 @@ where
         grouped.entry(key_fn(estimate)).or_default().push(estimate);
     }
 
-    let z = z_score_for_confidence(config.confidence_level.confidence_level);
     Ok(grouped
         .into_iter()
         .map(|(key, bucket)| {
@@ -195,14 +194,15 @@ where
                 })
                 .sum::<f64>();
             let se = variance.sqrt();
-            let margin = z * se;
+            let (ci_low, ci_high) =
+                normal_interval(estimate, se, config.confidence_level.confidence_level);
             (
                 key,
                 AttGtAggregatedEstimate {
                     estimate,
                     se,
-                    ci_low: estimate - margin,
-                    ci_high: estimate + margin,
+                    ci_low,
+                    ci_high,
                     components: bucket.len(),
                     total_weight: raw_total,
                 },

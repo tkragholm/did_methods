@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::inference::{validate_confidence_level, z_score_for_confidence};
+use crate::inference::{normal_interval, validate_confidence_level};
 use crate::types::{
     CellSummary, DidCell, DidConfig, DidError, DidEstimate, DidInputSummary, EventTimeError,
     EventTimeEstimate, EventTimePoint, EventTimeWeighting, PanelObservation, TimePeriod,
@@ -35,7 +35,6 @@ pub fn aggregate_event_time(
         grouped.entry(point.event_time).or_default().push(*point);
     }
 
-    let z = z_score_for_confidence(confidence_level);
     let mut output = Vec::with_capacity(grouped.len());
     for (event_time, bucket) in grouped {
         let total_weight = bucket
@@ -68,14 +67,14 @@ pub fn aggregate_event_time(
             })
             .sum::<f64>();
         let se = variance.sqrt();
-        let margin = z * se;
+        let (ci_low, ci_high) = normal_interval(estimate, se, confidence_level);
 
         output.push(EventTimeEstimate {
             event_time,
             estimate,
             se,
-            ci_low: estimate - margin,
-            ci_high: estimate + margin,
+            ci_low,
+            ci_high,
             points: bucket.len(),
             total_weight,
         });
@@ -215,12 +214,11 @@ pub fn estimate_att_from_summary(
         + (summary.control_post.variance / summary.control_post.effective_n))
         .sqrt();
 
-    let z = z_score_for_confidence(config.confidence_level);
-    let margin = z * se;
+    let (ci_low, ci_high) = normal_interval(att, se, config.confidence_level);
     Ok(DidEstimate {
         att,
         se,
-        ci_low: att - margin,
-        ci_high: att + margin,
+        ci_low,
+        ci_high,
     })
 }

@@ -54,6 +54,7 @@ mod adaptive_grid;
 mod api_types;
 mod bench_support;
 mod conditional_confidence_sets;
+mod conic;
 mod event_study_assessment;
 mod linear_algebra;
 mod relative_magnitude;
@@ -65,9 +66,8 @@ mod summary_api;
 pub use api_types::*;
 #[doc(hidden)]
 pub use bench_support::{
-    benchmark_sensitivity_matrix_rank, benchmark_sensitivity_multi_flci_maxima,
-    benchmark_sensitivity_multi_flci_maxima_scalar, benchmark_sensitivity_normal_draws,
-    benchmark_sensitivity_normal_draws_scalar, benchmark_sensitivity_rref_pivot_columns,
+    benchmark_sensitivity_matrix_rank, benchmark_sensitivity_multi_flci_critical_value,
+    benchmark_sensitivity_normal_draws, benchmark_sensitivity_rref_pivot_columns,
     benchmark_sensitivity_sandwich_covariance,
 };
 pub use event_study_assessment::{

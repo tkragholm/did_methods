@@ -29,9 +29,7 @@ fn reference_bands_sorted_quantile(
     for _ in 0..config.reps {
         let mut max_abs = 0.0_f64;
         for _ in 0..k {
-            let u1 = rng.uniform().max(f64::MIN_POSITIVE);
-            let u2 = rng.uniform();
-            let z = (-2.0_f64 * u1.ln()).sqrt() * (2.0_f64 * std::f64::consts::PI * u2).cos();
+            let z = rng.normal();
             max_abs = max_abs.max(z.abs());
         }
         maxima.push(max_abs);

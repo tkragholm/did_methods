@@ -1,7 +1,6 @@
 use super::super::super::linear_algebra::{
-    cholesky_lower, critical_value_from_pointwise_confidence,
-    pointwise_confidence_level_from_critical, simulated_lower_cholesky_maxima_batched,
-    simulation_rank,
+    critical_value_from_pointwise_confidence, pointwise_confidence_level_from_critical,
+    post_covariance_block, sup_t_critical_value,
 };
 use super::super::super::{
     HonestEventStudyInput, HonestJointPathConfig, HonestJointPathMethod, HonestJointPathPoint,
@@ -58,28 +57,6 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_joint_path_re
     )
 }
 
-fn build_post_correlation_block(input: &HonestEventStudyInput) -> Vec<Vec<f64>> {
-    let num_post = input.num_post_periods();
-    let start = input.num_pre_periods();
-    let mut corr = vec![vec![0.0; num_post]; num_post];
-    let stddevs: Vec<f64> = (0..num_post)
-        .map(|idx| input.covariance[start + idx][start + idx].max(0.0).sqrt())
-        .collect();
-    for i in 0..num_post {
-        for j in 0..num_post {
-            let denom = stddevs[i] * stddevs[j];
-            corr[i][j] = if i == j {
-                1.0
-            } else if denom <= 1e-12 {
-                0.0
-            } else {
-                (input.covariance[start + i][start + j] / denom).clamp(-1.0, 1.0)
-            };
-        }
-    }
-    corr
-}
-
 fn simulated_joint_pointwise_confidence_level(
     input: &HonestEventStudyInput,
     confidence_level: f64,
@@ -89,15 +66,17 @@ fn simulated_joint_pointwise_confidence_level(
     if simulation_draws == 0 {
         return Err("joint path simulation_draws must be positive".to_string());
     }
-    let corr = build_post_correlation_block(input);
-    let chol = cholesky_lower(&corr)?;
-    let mut maxima =
-        simulated_lower_cholesky_maxima_batched(&chol, simulation_draws, simulation_seed);
-    let n = maxima.len();
-    let rank = simulation_rank(n, confidence_level);
-    maxima.select_nth_unstable_by(rank.min(n - 1), f64::total_cmp);
-    let critical = maxima[rank.min(n - 1)];
-    Ok(critical)
+    let covariance = post_covariance_block(
+        &input.covariance,
+        input.num_pre_periods(),
+        input.num_post_periods(),
+    );
+    sup_t_critical_value(
+        &covariance,
+        confidence_level,
+        simulation_draws,
+        simulation_seed,
+    )
 }
 
 fn joint_pointwise_confidence_level(

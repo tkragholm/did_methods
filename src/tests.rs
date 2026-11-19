@@ -6,7 +6,6 @@ use crate::estimators::common::linalg::ridge_solve_lu;
 use crate::estimators::common::testing::{
     horvitz_thompson, normalize_weights, stabilize, trim, xt_w_b, xt_w_x,
 };
-use crate::estimators::common::weights::diag_sparse_from_vec;
 use crate::estimators::outcome::linear::LinearOutcome;
 use crate::estimators::outcome::model::OutcomeModel;
 use crate::estimators::propensity::common::logistic_scores;
@@ -320,8 +319,7 @@ fn irls_converges_for_simple_logistic_problem() {
     let design = make_logit_design();
     let target = make_logit_target();
 
-    let beta =
-        irls_fit(design.as_ref(), target.as_ref(), 200, 1e-8, 1e-8).expect("irls should converge");
+    let beta = irls_fit(design.as_ref(), target.as_ref(), 200, 1e-8).expect("irls should converge");
     assert_eq!(beta.nrows(), 2);
     assert_eq!(beta.ncols(), 1);
     assert!(beta.col_as_slice(0).iter().all(|v| v.is_finite()));
@@ -335,7 +333,7 @@ fn irls_converges_for_simple_logistic_problem() {
 fn irls_reports_non_convergence_when_no_iterations_allowed() {
     let design = make_logit_design();
     let target = make_logit_target();
-    let err = irls_fit(design.as_ref(), target.as_ref(), 0, 1e-8, 1e-8).expect_err("must fail");
+    let err = irls_fit(design.as_ref(), target.as_ref(), 0, 1e-8).expect_err("must fail");
     assert_eq!(
         err,
         PortedDidError::Convergence("IRLS did not converge".to_string())
@@ -409,13 +407,6 @@ fn horvitz_thompson_handles_regular_and_invalid_inputs() {
     assert!(horvitz_thompson(&[], &[], &[]).is_err());
     assert!(horvitz_thompson(&[1.0], &[1.0, 0.0], &[0.5]).is_err());
     assert!(horvitz_thompson(&[1.0], &[1.0], &[f64::NAN]).is_err());
-}
-
-#[test]
-fn diag_sparse_from_vec_builds_diagonal_matrix() {
-    let mat = diag_sparse_from_vec(&[2.0, 4.0, 8.0]).expect("sparse diagonal");
-    assert_eq!(mat.nrows(), 3);
-    assert_eq!(mat.ncols(), 3);
 }
 
 #[test]

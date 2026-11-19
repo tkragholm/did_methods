@@ -1,11 +1,11 @@
-use faer::Mat;
+use epistat_linalg::{weighted_gram as linalg_weighted_gram, weighted_xtz};
 use faer::prelude::SolveLstsq;
+use faer::{Mat, MatRef};
 use itertools::izip;
 
 use super::design::{DEPENDENCE_TOLERANCE, prune_design};
-use crate::estimators::common::linalg::{
-    SpdCholeskyScratch, solve_spd_system, solve_spd_system_multi_rhs,
-};
+use crate::estimators::common::linalg::{solve_spd_system, solve_spd_system_multi_rhs};
+use crate::estimators::common::logit::fit_logit;
 use crate::inference::{
     multiplier_bootstrap_ci, standard_error_from_influence, validate_confidence_level,
 };
@@ -121,9 +121,9 @@ pub fn estimate_drdid_panel_flat(
 /// [`estimate_drdid_panel_flat`] fits them for its ATT.
 ///
 /// The fits are the estimator's own: the same pruning of `input`'s design, the
-/// same weighted logistic propensity score by Newton-Raphson with
-/// `config.ridge` on the information matrix, and the same weighted least
-/// squares outcome regression among comparators. The standard errors are
+/// same weighted logistic propensity score by maximum likelihood, and the same
+/// weighted least squares outcome regression among comparators, which carries
+/// `config.ridge` on its diagonal. The standard errors are
 /// computed here and play no part in the ATT. Neither accounts for clustering.
 ///
 /// # Errors
@@ -184,10 +184,8 @@ pub fn fit_drdid_panel_propensity_coefficients(
             normalized_weights: &normalized_weights,
         },
         LogisticIrlsSettings {
-            ridge: config.ridge,
             max_iter: config.max_iter,
             tol: config.tol,
-            propensity_clip: config.propensity_clip,
         },
     )?;
     Ok(PanelPropensityCoefficients {
@@ -484,10 +482,8 @@ fn fit_panel_nuisance_models(
             normalized_weights: &normalized_weights,
         },
         LogisticIrlsSettings {
-            ridge: config.ridge,
             max_iter: config.max_iter,
             tol: config.tol,
-            propensity_clip: config.propensity_clip,
         },
     )?;
     let propensity_scores = predict_logistic_scores(
@@ -587,35 +583,22 @@ fn outcome_hc0_standard_errors(
         .collect())
 }
 
-/// `X' diag(weight) X` over every row, row-major.
+/// `X' diag(weight) X` over every row, row-major. The weights are not negative.
 fn weighted_gram(prepared: &PanelPreparedData, weight: impl Fn(usize) -> f64) -> Vec<f64> {
     let feature_count = prepared.feature_count;
-    let mut gram = vec![0.0; feature_count * feature_count];
-    let mut nonzero: Vec<usize> = Vec::with_capacity(feature_count);
-    for (row, x) in prepared
-        .design_matrix_flat
-        .chunks_exact(feature_count)
-        .enumerate()
-    {
-        let w = weight(row);
-        if w == 0.0 {
-            continue;
-        }
-        nonzero.clear();
-        nonzero.extend((0..feature_count).filter(|&c| x[c] != 0.0));
-        for (a, &i) in nonzero.iter().enumerate() {
-            let wi = w * x[i];
-            for &j in &nonzero[a..] {
-                gram[i * feature_count + j] += wi * x[j];
-            }
+    let row_count = prepared.treated_indicator.len();
+    let weights: Vec<f64> = (0..row_count).map(weight).collect();
+    let design =
+        MatRef::from_row_major_slice(&prepared.design_matrix_flat, row_count, feature_count);
+    let gram = linalg_weighted_gram(design, &weights)
+        .expect("the weights are products of non-negative factors");
+    let mut out = vec![0.0; feature_count * feature_count];
+    for row in 0..feature_count {
+        for col in 0..feature_count {
+            out[row * feature_count + col] = gram[(row, col)];
         }
     }
-    for i in 0..feature_count {
-        for j in 0..i {
-            gram[i * feature_count + j] = gram[j * feature_count + i];
-        }
-    }
-    gram
+    out
 }
 
 fn spd_inverse(matrix: &[f64], size: usize) -> Result<Mat<f64>, DrDidError> {
@@ -903,10 +886,8 @@ struct LogisticIrlsFit {
 
 #[derive(Clone, Copy)]
 struct LogisticIrlsSettings {
-    ridge: f64,
     max_iter: usize,
     tol: f64,
-    propensity_clip: f64,
 }
 
 fn fit_weighted_linear(
@@ -917,20 +898,11 @@ fn fit_weighted_linear(
     ridge: f64,
 ) -> Result<Vec<f64>, DrDidError> {
     let observation_count = outcome.len();
-    let design = Mat::from_fn(observation_count, feature_count, |row, col| {
-        design_matrix_flat[row * feature_count + col]
-    });
-    let weighted_design = Mat::from_fn(observation_count, feature_count, |row, col| {
-        design[(row, col)] * normalized_weights[row].sqrt()
-    });
-    let weighted_outcome = Mat::from_fn(observation_count, 1, |row, _| {
-        normalized_weights[row] * outcome[row]
-    });
-    let weighted_outcome_lstsq = Mat::from_fn(observation_count, 1, |row, _| {
-        normalized_weights[row].sqrt() * outcome[row]
-    });
-    let normal_matrix_mat = weighted_design.transpose() * &weighted_design;
-    let rhs_mat = design.transpose() * weighted_outcome;
+    let design = MatRef::from_row_major_slice(design_matrix_flat, observation_count, feature_count);
+    let normal_matrix_mat =
+        linalg_weighted_gram(design, normalized_weights).map_err(|_| DrDidError::SingularSystem)?;
+    let rhs_mat = weighted_xtz(design, normalized_weights, outcome)
+        .map_err(|_| DrDidError::SingularSystem)?;
 
     let mut normal_matrix = vec![0.0; feature_count * feature_count];
     for row in 0..feature_count {
@@ -949,9 +921,13 @@ fn fit_weighted_linear(
     match solve_spd_system(&normal_matrix, &rhs_vector) {
         Ok(solution) => Ok(solution),
         Err(_) if ridge > 0.0 && ridge <= 1e-6 => {
-            let solution = weighted_design
-                .col_piv_qr()
-                .solve_lstsq(&weighted_outcome_lstsq);
+            let weighted_design = Mat::from_fn(observation_count, feature_count, |row, col| {
+                design[(row, col)] * normalized_weights[row].sqrt()
+            });
+            let weighted_outcome = Mat::from_fn(observation_count, 1, |row, _| {
+                normalized_weights[row].sqrt() * outcome[row]
+            });
+            let solution = weighted_design.col_piv_qr().solve_lstsq(&weighted_outcome);
             let mut out = vec![0.0; feature_count];
             for feature_index in 0..feature_count {
                 let value = solution[(feature_index, 0)];
@@ -966,139 +942,30 @@ fn fit_weighted_linear(
     }
 }
 
+/// The weighted logit maximum likelihood fit, `glm(family = binomial)` with
+/// `epsilon = tol` and `maxit = max_iter`.
 fn fit_logistic_irls(
     inputs: LogisticIrlsInputs<'_>,
     settings: LogisticIrlsSettings,
 ) -> Result<LogisticIrlsFit, DrDidError> {
     let observation_count = inputs.treated_indicator.len();
-    let feature_count = inputs.feature_count;
-    // The caller's, which is what they are for.
-    //
-    // These read `settings.tol.min(1e-12)` and `settings.max_iter.max(1_000)`:
-    // the tolerance was floored a further ten thousand times tighter than the
-    // 1e-8 default and the iteration budget was RAISED to a thousand, so a
-    // caller could only ever ask for more work, never less. Neither override
-    // was documented and neither is load-bearing.
-    //
-    // What it cost: a propensity model that separates -- which is the norm in a
-    // sparse (g,t) cell, and Study I has thousands of them -- never gets its
-    // step below 1e-12, so it ran the full thousand iterations, each an
-    // O(n * k^2) sweep to build the Hessian. Measured over 360 cells of 4,000
-    // units at 22 covariates: mean 173 iterations and a maximum of 1,000
-    // against the caller's 200, and 51.34s against 12.61s. At 20,000 units,
-    // where the fits converge in five, the two are the same speed.
-    //
-    // And the extra iterations changed nothing. Every one of 1,080 ATT(g,t)
-    // estimates across three panel sizes is BIT-IDENTICAL under the two
-    // policies: the coefficients stop moving the estimate long before the step
-    // size satisfies 1e-12.
-    let convergence_tol = settings.tol;
-    let max_iterations = settings.max_iter.max(1);
-    let mut coefficients = vec![0.0; feature_count];
-    let treated_share =
-        inputs.treated_indicator.iter().sum::<f64>() / usize_to_f64(observation_count);
-    coefficients[0] = logit_clamped(treated_share, settings.propensity_clip);
-
-    let mut hessian = vec![0.0; feature_count * feature_count];
-    let mut gradient = vec![0.0; feature_count];
-    let mut candidate = vec![0.0; feature_count];
-    let mut probabilities = vec![0.0; observation_count];
-    let mut step = vec![0.0; feature_count];
-    let mut nonzero: Vec<usize> = Vec::with_capacity(feature_count);
-    let mut scratch_solver = SpdCholeskyScratch::new(feature_count);
-    let mut current_loglik = weighted_loglik(&coefficients, inputs, &mut probabilities);
-
-    for iteration in 1..=max_iterations {
-        hessian.fill(0.0);
-        gradient.fill(0.0);
-
-        for feature_index in 0..feature_count {
-            hessian[feature_index * feature_count + feature_index] = settings.ridge;
-        }
-
-        for (row_index, probability) in probabilities.iter().copied().enumerate() {
-            let feature_row = &inputs.design_matrix_flat
-                [row_index * feature_count..(row_index + 1) * feature_count];
-            let response = inputs.treated_indicator[row_index];
-            let weight = inputs.normalized_weights[row_index];
-            let residual = weight * (response - probability);
-            let variance =
-                (weight * probability * (1.0 - probability)).max(settings.propensity_clip);
-
-            nonzero.clear();
-            nonzero.extend((0..feature_count).filter(|&c| feature_row[c] != 0.0));
-            for (position, &left_feature_index) in nonzero.iter().enumerate() {
-                gradient[left_feature_index] = residual.mul_add(
-                    feature_row[left_feature_index],
-                    gradient[left_feature_index],
-                );
-                for &right_feature_index in &nonzero[position..] {
-                    let weighted_outer = variance
-                        * feature_row[left_feature_index]
-                        * feature_row[right_feature_index];
-                    hessian[left_feature_index * feature_count + right_feature_index] +=
-                        weighted_outer;
-                    if left_feature_index != right_feature_index {
-                        hessian[right_feature_index * feature_count + left_feature_index] +=
-                            weighted_outer;
-                    }
-                }
-            }
-        }
-
-        if scratch_solver
-            .solve_single_rhs_into(&hessian, &gradient, &mut step)
-            .is_err()
-        {
-            step = solve_spd_system(&hessian, &gradient).map_err(|_| DrDidError::SingularSystem)?;
-        }
-        let max_step = step.iter().map(|value| value.abs()).fold(0.0, f64::max);
-        if max_step <= convergence_tol {
-            return Ok(LogisticIrlsFit {
-                coefficients,
-                iterations: iteration,
-                converged: true,
-            });
-        }
-
-        let mut step_scale = 1.0;
-        let mut accepted = false;
-        for _ in 0..11 {
-            for feature_index in 0..feature_count {
-                candidate[feature_index] =
-                    coefficients[feature_index] + step_scale * step[feature_index];
-            }
-            let candidate_loglik = weighted_loglik(&candidate, inputs, &mut probabilities);
-            if candidate_loglik >= current_loglik {
-                coefficients.clone_from_slice(&candidate);
-                current_loglik = candidate_loglik;
-                accepted = true;
-                break;
-            }
-            step_scale *= 0.5;
-            if step_scale < 1.0 / 1024.0 {
-                break;
-            }
-        }
-
-        if !accepted {
-            // No step along the direction raised the likelihood. Half the
-            // Newton decrement, g' H^-1 g / 2, is what a step could still
-            // gain, and below a relative `tol` of the likelihood the fit is
-            // at its maximum to working precision: `glm`'s rule, which stops
-            // on a relative change in the deviance.
-            let decrement = dot(&gradient, &step);
-            return Ok(LogisticIrlsFit {
-                coefficients,
-                iterations: iteration,
-                converged: 0.5 * decrement <= convergence_tol * (current_loglik.abs() + 0.1),
-            });
-        }
-    }
+    let design = MatRef::from_row_major_slice(
+        inputs.design_matrix_flat,
+        observation_count,
+        inputs.feature_count,
+    );
+    let fit = fit_logit(
+        design,
+        inputs.treated_indicator,
+        Some(inputs.normalized_weights),
+        settings.tol,
+        settings.max_iter.max(1),
+    )
+    .map_err(|_| DrDidError::SingularSystem)?;
     Ok(LogisticIrlsFit {
-        coefficients,
-        iterations: max_iterations,
-        converged: false,
+        coefficients: fit.coefficients,
+        iterations: fit.iterations,
+        converged: fit.converged,
     })
 }
 
@@ -1122,36 +989,6 @@ fn predict_logistic_scores(x: &[f64], p: usize, beta: &[f64], clip: f64) -> Vec<
 fn sigmoid(value: f64) -> f64 {
     let clipped = value.clamp(-35.0, 35.0);
     1.0 / (1.0 + (-clipped).exp())
-}
-
-fn logit_clamped(probability: f64, clip: f64) -> f64 {
-    let p = probability.clamp(clip, 1.0 - clip);
-    (p / (1.0 - p)).ln()
-}
-
-fn weighted_loglik(
-    coefficients: &[f64],
-    inputs: LogisticIrlsInputs<'_>,
-    probabilities: &mut [f64],
-) -> f64 {
-    let mut loglik = 0.0;
-    for (prob, feature_row, &response, &weight) in izip!(
-        probabilities.iter_mut(),
-        inputs.design_matrix_flat.chunks_exact(inputs.feature_count),
-        inputs.treated_indicator.iter(),
-        inputs.normalized_weights.iter()
-    ) {
-        let probability = sigmoid(dot(feature_row, coefficients)).clamp(1e-12, 1.0 - 1e-12);
-        *prob = probability;
-        loglik = weight.mul_add(
-            response.mul_add(
-                probability.ln(),
-                (1.0 - response) * (1.0 - probability).ln(),
-            ),
-            loglik,
-        );
-    }
-    loglik
 }
 
 #[cfg(test)]
@@ -1364,22 +1201,18 @@ mod tests {
     }
 
     #[test]
-    fn a_score_whose_steps_stall_above_tol_at_the_maximum_has_converged() {
-        // On this design the Newton steps stop shrinking at about 1.7e-8,
-        // above the 1e-8 tolerance, and the line search finds no step that
-        // raises the likelihood: the step is rounding, and the Newton
-        // decrement is 5e-16 against a likelihood of -2,600.
+    fn the_default_tolerance_converges_to_the_maximum_likelihood_coefficients() {
         let (treated, delta, weight, design) = registry_like_panel(1, 4000);
         let input = flat(&treated, &delta, &weight, &design, 16);
         let fit = fit_drdid_panel_nuisance(input, DrDidConfig::default()).unwrap();
         assert!(fit.converged);
         assert!(fit.iterations < DrDidConfig::default().max_iter);
-        let loose =
-            fit_drdid_panel_nuisance(input, DrDidConfig::builder().tol(1e-5).build()).unwrap();
+        let tight =
+            fit_drdid_panel_nuisance(input, DrDidConfig::builder().tol(1e-13).build()).unwrap();
         for (a, b) in fit
             .propensity_coefficients
             .iter()
-            .zip(&loose.propensity_coefficients)
+            .zip(&tight.propensity_coefficients)
         {
             assert!((a - b).abs() < 1e-5, "{a} {b}");
         }
@@ -1501,10 +1334,8 @@ mod tests {
                 normalized_weights: &w,
             },
             LogisticIrlsSettings {
-                ridge: 1e-8,
                 max_iter: 200,
                 tol: 1e-8,
-                propensity_clip: 1e-6,
             },
         )
         .expect("irls")
@@ -1518,11 +1349,11 @@ mod tests {
     }
 
     #[test]
-    fn fit_logistic_irls_rejects_singular_system_without_ridge() {
+    fn fit_logistic_irls_gives_an_aliased_column_the_coefficient_zero() {
         let x = vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
         let d = vec![0.0, 1.0, 0.0];
         let w = vec![1.0; 3];
-        let err = fit_logistic_irls(
+        let fit = fit_logistic_irls(
             LogisticIrlsInputs {
                 design_matrix_flat: &x,
                 feature_count: 2,
@@ -1530,14 +1361,13 @@ mod tests {
                 normalized_weights: &w,
             },
             LogisticIrlsSettings {
-                ridge: 0.0,
-                max_iter: 1,
+                max_iter: 25,
                 tol: 1e-12,
-                propensity_clip: 1e-6,
             },
         )
-        .expect_err("must fail");
-        assert_eq!(err, DrDidError::SingularSystem);
+        .expect("fit");
+        assert_eq!(fit.coefficients[1], 0.0);
+        assert!((fit.coefficients[0] - (0.5_f64).ln()).abs() < 1e-8);
     }
 
     #[test]
@@ -1558,8 +1388,6 @@ mod tests {
         assert!((dot(&[1.0, 2.0], &[3.0, 4.0]) - 11.0).abs() < 1e-12);
         assert!(sigmoid(-1_000.0) > 0.0);
         assert!(sigmoid(1_000.0) < 1.0);
-        assert!(logit_clamped(0.0, 1e-6).is_finite());
-        assert!(logit_clamped(1.0, 1e-6).is_finite());
     }
 
     /// A deterministic stream in [0, 1).

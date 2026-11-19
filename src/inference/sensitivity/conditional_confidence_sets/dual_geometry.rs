@@ -6,10 +6,9 @@
 //! truncated-normal acceptance region used by the conditional `HonestDiD` test.
 
 use clarabel::algebra::CscMatrix;
-use clarabel::solver::{
-    DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
-};
+use clarabel::solver::SupportedConeT;
 
+use super::super::conic;
 use super::super::linear_algebra::{
     build_clarabel_matrix, dot, matrix_rank, solve_square_linear_system_transposed,
     truncated_normal_quantile,
@@ -414,24 +413,15 @@ pub(super) fn solve_dual_max_with_clarabel_fallback(
     ];
     let quadratic = CscMatrix::<f64>::zeros((dim, dim));
     let q = f.iter().map(|value| -*value).collect::<Vec<_>>();
-    let settings = DefaultSettingsBuilder::<f64>::default()
-        .verbose(false)
-        .build()
-        .map_err(|err| format!("failed to build Clarabel settings: {err}"))?;
-    let mut solver = DefaultSolver::new(&quadratic, &q, &constraint_matrix, &rhs, &cones, settings)
-        .map_err(|err| format!("failed to initialize Clarabel dual max LP: {err}"))?;
-    solver.solve();
-    counter.note_status(solver.solution.status);
-    match solver.solution.status {
-        SolverStatus::Solved | SolverStatus::AlmostSolved => Ok(dot(&solver.solution.x, f)),
-        SolverStatus::PrimalInfeasible
-        | SolverStatus::DualInfeasible
-        | SolverStatus::AlmostPrimalInfeasible
-        | SolverStatus::AlmostDualInfeasible => {
-            Err("Clarabel dual max program is infeasible".to_string())
-        }
-        status => Err(format!(
-            "Clarabel failed to solve HonestDiD dual max LP: {status:?}"
-        )),
-    }
+    conic::solve(
+        "HonestDiD dual max LP",
+        &quadratic,
+        &q,
+        &constraint_matrix,
+        &rhs,
+        &cones,
+        counter,
+    )?
+    .map(|solution| dot(&solution, f))
+    .ok_or_else(|| "Clarabel dual max program is infeasible".to_string())
 }

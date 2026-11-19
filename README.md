@@ -34,12 +34,12 @@ cargo test --features parity-tests
 
 ## Use
 
-The crate is not on crates.io, because it depends on a git branch of
-`argmin`. Add it from GitHub:
+The crate is on crates.io. Its shared numerical code comes from the
+`epistat-*` crates, also on crates.io.
 
 ```toml
 [dependencies]
-did_methods = { git = "https://github.com/tkragholm/did_methods" }
+did_methods = "0.2"
 ```
 
 `examples/att_gt_basic.rs` estimates ATT(g,t) on a small panel and

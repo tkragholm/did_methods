@@ -19,7 +19,7 @@ pub mod least_favorable_intervals;
 
 use rayon::prelude::*;
 
-use crate::inference::z_score_for_confidence;
+use crate::inference::normal_interval;
 use crate::types::InferenceConfig;
 
 use super::adaptive_grid::{AcceptedGridRange, nearest_grid_index};
@@ -563,12 +563,10 @@ pub fn compute_original_confidence_set(
         }
     }
     let se = variance.max(0.0).sqrt();
-    let z = z_score_for_confidence(inference.confidence_level);
-    let margin = z * se;
     Ok(HonestOriginalConfidenceSet {
         estimate,
         se,
-        ci: (estimate - margin, estimate + margin),
+        ci: normal_interval(estimate, se, inference.confidence_level),
     })
 }
 
