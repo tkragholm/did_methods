@@ -1,7 +1,7 @@
+use epistat_inference::Clusters;
 use faer::linalg::matmul::matmul;
 use faer::{Accum, Mat, MatRef, Par};
 use statrs::distribution::{ChiSquared, ContinuousCDF};
-use std::collections::HashMap;
 use std::hash::Hash;
 
 use crate::estimators::common::linalg::solve_dense_system;
@@ -112,20 +112,7 @@ pub fn clustered_covariance_matrix_from_influence_matrix<L: Eq + Hash>(
         }
     }
 
-    let mut group_assignments = Vec::with_capacity(n);
-    let mut label_to_group = HashMap::<&L, usize>::new();
-    for label in cluster_labels {
-        let next_group = label_to_group.len();
-        let group = *label_to_group.entry(label).or_insert(next_group);
-        group_assignments.push(group);
-    }
-    clustered_covariance_matrix_from_influence_matrix_index(
-        influence_functions,
-        &crate::inference::ClusterIndex {
-            group_assignments,
-            n_groups: label_to_group.len(),
-        },
-    )
+    clustered_covariance_from_clusters(influence_functions, &Clusters::from_labels(cluster_labels))
 }
 
 /// Compute the cluster-robust covariance matrix from a set of influence function vectors using a pre-computed index.
@@ -138,8 +125,7 @@ pub fn clustered_covariance_matrix_from_influence_matrix_index(
     influence_functions: &[Vec<f64>],
     cluster_index: &crate::inference::ClusterIndex,
 ) -> Result<Vec<Vec<f64>>, String> {
-    let (k, n, n_f) =
-        validate_influence_matrix(influence_functions, "clustered covariance matrix")?;
+    let (_, n, _) = validate_influence_matrix(influence_functions, "clustered covariance matrix")?;
     if cluster_index.group_assignments.len() != n {
         return Err(format!(
             "clustered covariance matrix requires aligned influence/cluster lengths ({} vs {})",
@@ -147,69 +133,24 @@ pub fn clustered_covariance_matrix_from_influence_matrix_index(
             cluster_index.group_assignments.len()
         ));
     }
+    clustered_covariance_from_clusters(
+        influence_functions,
+        &Clusters::from_labels(&cluster_index.group_assignments),
+    )
+}
 
-    let g = cluster_index.n_groups;
-    let correction = if g >= 2 {
-        let g_f = usize_to_f64(g);
-        g_f / (g_f - 1.0)
-    } else {
-        1.0
-    };
-    let scale = correction / (n_f * n_f);
-    let mut covariance = vec![vec![0.0; k]; k];
-
-    for row_start in (0..k).step_by(VCOV_BLOCK_SIZE) {
-        let row_end = (row_start + VCOV_BLOCK_SIZE).min(k);
-        for col_start in (row_start..k).step_by(VCOV_BLOCK_SIZE) {
-            let col_end = (col_start + VCOV_BLOCK_SIZE).min(k);
-            let row_block_len = row_end - row_start;
-            let col_block_len = col_end - col_start;
-            let mut left_sums = vec![0.0; g * row_block_len];
-            let mut right_sums = vec![0.0; g * col_block_len];
-
-            for (sample_idx, group_idx) in cluster_index
-                .group_assignments
-                .iter()
-                .copied()
-                .enumerate()
-                .take(n)
-            {
-                let left_base = group_idx * row_block_len;
-                let right_base = group_idx * col_block_len;
-                for (local_row, estimate_idx) in (row_start..row_end).enumerate() {
-                    left_sums[left_base + local_row] +=
-                        influence_functions[estimate_idx][sample_idx];
-                }
-                for (local_col, estimate_idx) in (col_start..col_end).enumerate() {
-                    right_sums[right_base + local_col] +=
-                        influence_functions[estimate_idx][sample_idx];
-                }
-            }
-
-            let left = MatRef::from_row_major_slice(&left_sums, g, row_block_len);
-            let right = MatRef::from_row_major_slice(&right_sums, g, col_block_len);
-            let mut block = Mat::<f64>::zeros(row_block_len, col_block_len);
-            matmul(
-                block.as_mut(),
-                Accum::Replace,
-                left.transpose(),
-                right,
-                scale,
-                Par::Seq,
-            );
-            for local_row in 0..row_block_len {
-                let global_row = row_start + local_row;
-                for local_col in 0..col_block_len {
-                    let global_col = col_start + local_col;
-                    let value = block[(local_row, local_col)];
-                    covariance[global_row][global_col] = value;
-                    covariance[global_col][global_row] = value;
-                }
-            }
-        }
-    }
-
-    Ok(covariance)
+fn clustered_covariance_from_clusters(
+    influence_functions: &[Vec<f64>],
+    clusters: &Clusters,
+) -> Result<Vec<Vec<f64>>, String> {
+    let columns = influence_functions
+        .iter()
+        .map(Vec::as_slice)
+        .collect::<Vec<_>>();
+    let k = columns.len();
+    let flat = epistat_inference::influence::clustered_covariance(&columns, clusters)
+        .map_err(|error| error.to_string())?;
+    Ok(flat.chunks(k).map(<[f64]>::to_vec).collect())
 }
 
 fn validate_influence_matrix(

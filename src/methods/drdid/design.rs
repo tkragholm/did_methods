@@ -35,6 +35,8 @@
 //! column that passes the pooled test can still fail within one arm, and the
 //! estimator then drops it as well.
 
+use faer::MatRef;
+
 use crate::types::DrDidError;
 
 /// The rows on which a design column has to be identified to be kept.
@@ -144,75 +146,13 @@ pub(super) fn prune_design(
             kept: vec![true; feature_count],
         };
     }
-    let group_count = group.iter().max().map_or(0, |g| g + 1);
-
-    // One weighted Gram per group, upper triangle in full storage.
-    let size = feature_count * feature_count;
-    let mut grams = vec![0.0; group_count * size];
-    let mut nonzero: Vec<usize> = Vec::with_capacity(feature_count);
-    for row in 0..row_count {
-        let gram = &mut grams[group[row] * size..(group[row] + 1) * size];
-        let x = &design_flat[row * feature_count..(row + 1) * feature_count];
-        let w = weights[row];
-        nonzero.clear();
-        nonzero.extend((0..feature_count).filter(|&c| x[c] != 0.0));
-        for (a, &i) in nonzero.iter().enumerate() {
-            let wi = w * x[i];
-            for &j in &nonzero[a..] {
-                gram[i * feature_count + j] += wi * x[j];
-            }
-        }
-    }
-    let entry = |gram: &[f64], i: usize, j: usize| {
-        let (a, b) = if i <= j { (i, j) } else { (j, i) };
-        gram[a * feature_count + b]
-    };
-
-    // Greedy Cholesky per group over the kept set. A candidate joins the kept
-    // set only if it is independent in every group.
-    let mut kept: Vec<usize> = Vec::with_capacity(feature_count);
-    let mut factors: Vec<Vec<Vec<f64>>> = vec![Vec::new(); group_count];
-    for candidate in 0..feature_count {
-        let mut projections: Vec<Vec<f64>> = Vec::with_capacity(group_count);
-        let mut independent = true;
-        for g in 0..group_count {
-            let gram = &grams[g * size..(g + 1) * size];
-            let own = entry(gram, candidate, candidate);
-            if own <= 0.0 {
-                // The intercept is never zero in a group with rows; a group
-                // without rows says nothing about the column.
-                if gram[0] > 0.0 {
-                    independent = false;
-                }
-                projections.push(Vec::new());
-                continue;
-            }
-            let factor = &factors[g];
-            let mut projection = vec![0.0; kept.len()];
-            for (row, &k) in kept.iter().enumerate() {
-                let mut total = entry(gram, candidate, k);
-                for col in 0..row {
-                    total -= factor[row][col] * projection[col];
-                }
-                projection[row] = total / factor[row][row];
-            }
-            let residual = own - projection.iter().map(|v| v * v).sum::<f64>();
-            if candidate > 0 && residual <= tolerance * own {
-                independent = false;
-            }
-            projection.push(residual.max(0.0).sqrt());
-            projections.push(projection);
-        }
-        if !independent {
-            continue;
-        }
-        for (g, projection) in projections.into_iter().enumerate() {
-            if !projection.is_empty() {
-                factors[g].push(projection);
-            }
-        }
-        kept.push(candidate);
-    }
+    let kept_flags = epistat_linalg::design::independent_columns(
+        MatRef::from_row_major_slice(design_flat, row_count, feature_count),
+        weights,
+        Some(group),
+        tolerance,
+    );
+    let kept: Vec<usize> = (0..feature_count).filter(|&c| kept_flags[c]).collect();
 
     let dropped = feature_count - kept.len();
     let mut kept_flags = vec![false; feature_count];

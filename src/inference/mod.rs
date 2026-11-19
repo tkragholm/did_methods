@@ -1,9 +1,8 @@
 //! Shared statistical inference utilities (critical values, IF-based SE, bootstrap CI).
 
-use std::collections::HashMap;
+use epistat_inference::Clusters;
 use std::hash::Hash;
 
-use rayon::prelude::*;
 use thiserror::Error;
 
 pub mod export;
@@ -15,7 +14,6 @@ pub mod sensitivity;
 pub mod vcov;
 
 use crate::types::{BootstrapConfig, InferenceConfig};
-use crate::util::usize_to_f64;
 
 /// Typed cluster specification — prevents label/data misalignment.
 #[derive(Debug, Clone)]
@@ -36,6 +34,12 @@ impl<L: Eq + Hash + Clone> ClusterSpec<L> {
 pub struct ClusterIndex {
     pub group_assignments: Vec<usize>,
     pub n_groups: usize,
+}
+
+impl ClusterIndex {
+    fn clusters(&self) -> Clusters {
+        Clusters::from_labels(&self.group_assignments)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Error)]
@@ -60,26 +64,32 @@ pub fn validate_confidence_level(confidence_level: f64) -> bool {
     confidence_level.is_finite() && confidence_level > 0.0 && confidence_level < 1.0
 }
 
+/// Two-sided normal critical value for a confidence level in (0, 1).
 #[must_use]
 pub fn z_score_for_confidence(confidence_level: f64) -> f64 {
-    // Two-sided normal critical value for arbitrary confidence levels in (0, 1).
-    let p = 0.5f64.mul_add(confidence_level, 0.5);
-    inverse_standard_normal_cdf(p)
+    inverse_standard_normal_cdf(0.5 * confidence_level + 0.5)
 }
 
+/// Standard error of an estimate from its influence function: the standard
+/// deviation of the values divided by `sqrt(n)`. NaN for an empty influence
+/// function.
 #[must_use]
 pub fn standard_error_from_influence(influence_function: &[f64]) -> f64 {
-    let n_f = usize_to_f64(influence_function.len());
-    let mean_if = influence_function.iter().sum::<f64>() / n_f;
-    let centered_mean_square = influence_function
-        .iter()
-        .map(|value| {
-            let centered = value - mean_if;
-            centered * centered
-        })
-        .sum::<f64>()
-        / n_f;
-    centered_mean_square.sqrt() / n_f.sqrt()
+    epistat_inference::influence::standard_error(influence_function).unwrap_or(f64::NAN)
+}
+
+fn map_influence_error(error: &epistat_inference::InferenceError) -> InferenceError {
+    use epistat_inference::InferenceError as Shared;
+    match *error {
+        Shared::Length {
+            expected, found, ..
+        } => InferenceError::MisalignedClusterLengths {
+            influence_len: expected,
+            cluster_len: found,
+        },
+        Shared::Empty => InferenceError::EmptyInfluenceFunction,
+        _ => InferenceError::NonFiniteClusteredVariance,
+    }
 }
 
 /// Computes the clustered variance from influence function values using a pre-computed index.
@@ -93,44 +103,8 @@ pub fn clustered_variance_from_index(
     influence_function: &[f64],
     cluster_index: &ClusterIndex,
 ) -> Result<f64, InferenceError> {
-    if influence_function.is_empty() {
-        return Err(InferenceError::EmptyInfluenceFunction);
-    }
-    if influence_function.len() != cluster_index.group_assignments.len() {
-        return Err(InferenceError::MisalignedClusterLengths {
-            influence_len: influence_function.len(),
-            cluster_len: cluster_index.group_assignments.len(),
-        });
-    }
-
-    let n_f = usize_to_f64(influence_function.len());
-    let mut cluster_sums = vec![0.0; cluster_index.n_groups];
-
-    for (psi, &group_idx) in influence_function
-        .iter()
-        .zip(&cluster_index.group_assignments)
-    {
-        cluster_sums[group_idx] += *psi;
-    }
-
-    let variance = if cluster_index.n_groups >= 2 {
-        let g_f = usize_to_f64(cluster_index.n_groups);
-        let correction = g_f / (g_f - 1.0);
-        let sum_sq = cluster_sums.iter().map(|&val| val * val).sum::<f64>();
-        let scaled = correction * sum_sq;
-        scaled / (n_f * n_f)
-    } else {
-        influence_function
-            .iter()
-            .map(|value| value * value)
-            .sum::<f64>()
-            / (n_f * n_f)
-    };
-
-    if !variance.is_finite() {
-        return Err(InferenceError::NonFiniteClusteredVariance);
-    }
-    Ok(variance.max(0.0))
+    epistat_inference::influence::clustered_variance(influence_function, &cluster_index.clusters())
+        .map_err(|error| map_influence_error(&error))
 }
 
 /// Computes the clustered standard error from influence function values using a pre-computed index.
@@ -166,7 +140,9 @@ pub fn clustered_ci_from_index(
     Ok((se, estimate - margin, estimate + margin))
 }
 
-/// Computes the clustered variance from influence function values.
+/// Computes the clustered variance from influence function values. Clusters
+/// are numbered in order of first appearance, so the sum does not depend on
+/// hashing.
 ///
 /// # Errors
 /// Returns an error if:
@@ -177,41 +153,11 @@ pub fn clustered_variance_from_influence<L: Eq + Hash>(
     influence_function: &[f64],
     cluster_labels: &[L],
 ) -> Result<f64, InferenceError> {
-    if influence_function.is_empty() {
-        return Err(InferenceError::EmptyInfluenceFunction);
-    }
-    if influence_function.len() != cluster_labels.len() {
-        return Err(InferenceError::MisalignedClusterLengths {
-            influence_len: influence_function.len(),
-            cluster_len: cluster_labels.len(),
-        });
-    }
-
-    let n_f = usize_to_f64(influence_function.len());
-    let mut cluster_sum = HashMap::<&L, f64>::new();
-    for (psi, label) in influence_function.iter().zip(cluster_labels) {
-        let entry = cluster_sum.entry(label).or_insert(0.0);
-        *entry += *psi;
-    }
-
-    let variance = if cluster_sum.len() >= 2 {
-        let g_f = usize_to_f64(cluster_sum.len());
-        let correction = g_f / (g_f - 1.0);
-        let sum_sq = cluster_sum.values().map(|value| value * value).sum::<f64>();
-        let scaled = correction * sum_sq;
-        scaled / (n_f * n_f)
-    } else {
-        influence_function
-            .iter()
-            .map(|value| value * value)
-            .sum::<f64>()
-            / (n_f * n_f)
-    };
-
-    if !variance.is_finite() {
-        return Err(InferenceError::NonFiniteClusteredVariance);
-    }
-    Ok(variance.max(0.0))
+    epistat_inference::influence::clustered_variance(
+        influence_function,
+        &Clusters::from_labels(cluster_labels),
+    )
+    .map_err(|error| map_influence_error(&error))
 }
 
 /// Computes the clustered standard error from influence function values.
@@ -247,6 +193,10 @@ pub fn clustered_ci_from_influence<L: Eq + Hash>(
     Ok((se, estimate - margin, estimate + margin))
 }
 
+/// Percentile interval of the Rademacher multiplier bootstrap of an estimate
+/// with the given influence function. Replicate `r` is seeded with
+/// `replicate_seed(seed, r)`, so the interval does not depend on the number of
+/// threads. An empty influence function gives `(NaN, NaN)`.
 #[must_use]
 pub fn multiplier_bootstrap_ci(
     estimate: f64,
@@ -254,27 +204,13 @@ pub fn multiplier_bootstrap_ci(
     inference: InferenceConfig,
     bootstrap: BootstrapConfig,
 ) -> (f64, f64) {
-    use rand::{SeedableRng, rngs::StdRng};
-
-    let n_f = usize_to_f64(influence_function.len());
-    let mut draws = if should_parallelize_bootstrap(bootstrap.reps, influence_function.len()) {
-        (0..bootstrap.reps)
-            .into_par_iter()
-            .map(|draw_idx| {
-                let mut rng =
-                    StdRng::seed_from_u64(bootstrap_seed_for_draw(bootstrap.seed, draw_idx));
-                let perturbation = rademacher_perturbation_bitpacked(influence_function, &mut rng);
-                estimate + perturbation / n_f
-            })
-            .collect::<Vec<_>>()
-    } else {
-        let mut rng = StdRng::seed_from_u64(bootstrap.seed);
-        let mut draws = Vec::with_capacity(bootstrap.reps);
-        for _ in 0..bootstrap.reps {
-            let perturbation = rademacher_perturbation_bitpacked(influence_function, &mut rng);
-            draws.push(estimate + perturbation / n_f);
-        }
-        draws
+    let Ok(mut draws) = epistat_inference::bootstrap::multiplier(
+        estimate,
+        influence_function,
+        bootstrap.reps,
+        bootstrap.seed,
+    ) else {
+        return (f64::NAN, f64::NAN);
     };
 
     let alpha = (1.0 - inference.confidence_level).clamp(0.0, 1.0);
@@ -283,202 +219,43 @@ pub fn multiplier_bootstrap_ci(
     (lower, upper)
 }
 
-fn should_parallelize_bootstrap(reps: usize, influence_len: usize) -> bool {
-    reps >= 128 && influence_len >= 4_096 && rayon::current_num_threads() > 1
-}
-
-fn bootstrap_seed_for_draw(base_seed: u64, draw_idx: usize) -> u64 {
-    let idx = u64::try_from(draw_idx).unwrap_or(u64::MAX);
-    splitmix64(base_seed ^ idx.wrapping_mul(0x9E37_79B9_7F4A_7C15))
-}
-
-const fn splitmix64(mut value: u64) -> u64 {
-    value = value.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = value;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
-#[cfg(test)]
-fn rademacher_perturbation_scalar(influence_function: &[f64], rng: &mut rand::rngs::StdRng) -> f64 {
-    use rand::RngExt;
-
-    influence_function.iter().fold(0.0, |acc, value| {
-        let sign = if rng.random_bool(0.5) { 1.0 } else { -1.0 };
-        acc + sign * value
-    })
-}
-
-fn rademacher_perturbation_bitpacked(
-    influence_function: &[f64],
-    rng: &mut rand::rngs::StdRng,
-) -> f64 {
-    use rand::RngExt;
-
-    let mut perturbation = 0.0;
-    let mut chunk_start = 0usize;
-    while chunk_start < influence_function.len() {
-        let mut bits = rng.random::<u64>();
-        let chunk_end = (chunk_start + 64).min(influence_function.len());
-        for value in &influence_function[chunk_start..chunk_end] {
-            let sign = if (bits & 1) == 1 { 1.0 } else { -1.0 };
-            perturbation += sign * *value;
+/// Overwrites `signs` with independent Rademacher multipliers, +1 for a set
+/// bit, taking 64 signs from each output of `stream`.
+pub(crate) fn fill_rademacher_signs(stream: &mut epistat_rng::Stream, signs: &mut [f64]) {
+    for chunk in signs.chunks_mut(64) {
+        let mut bits = stream.next_u64();
+        for sign in chunk {
+            *sign = if bits & 1 == 1 { 1.0 } else { -1.0 };
             bits >>= 1;
         }
-        chunk_start += 64;
     }
-    perturbation
 }
 
+/// Type 7 quantile of a sorted sample, with `q` clamped to `[0, 1]`. NaN for an
+/// empty sample.
 #[must_use]
 pub fn quantile_sorted(sorted: &[f64], q: f64) -> f64 {
-    if sorted.is_empty() {
-        return f64::NAN;
-    }
-    if sorted.len() == 1 {
-        return sorted[0];
-    }
-    let clamped_q = q.clamp(0.0, 1.0);
-    let last = sorted.len() - 1;
-    let rank = clamped_q * usize_to_f64(last);
-    let lower = float_floor_to_usize(rank, last);
-    let upper = float_ceil_to_usize(rank, last);
-    if lower == upper {
-        sorted[lower]
-    } else {
-        let fraction = rank - usize_to_f64(lower);
-        sorted[lower].mul_add(1.0 - fraction, sorted[upper] * fraction)
-    }
+    epistat_stats::quantile::type7(sorted, q.clamp(0.0, 1.0)).unwrap_or(f64::NAN)
 }
 
+/// Type 7 quantile of an unsorted sample, which it partially reorders, with
+/// `q` clamped to `[0, 1]`. NaN for an empty sample.
 #[must_use]
 pub fn quantile_unsorted(values: &mut [f64], q: f64) -> f64 {
-    if values.is_empty() {
-        return f64::NAN;
-    }
-    if values.len() == 1 {
-        return values[0];
-    }
-    let clamped_q = q.clamp(0.0, 1.0);
-    let last = values.len() - 1;
-    let rank = clamped_q * usize_to_f64(last);
-    let lower = float_floor_to_usize(rank, last);
-    let upper = float_ceil_to_usize(rank, last);
-
-    values.select_nth_unstable_by(lower, f64::total_cmp);
-    let lower_value = values[lower];
-    if lower == upper {
-        return lower_value;
-    }
-
-    let right = &mut values[lower + 1..];
-    let upper_in_right = upper - lower - 1;
-    right.select_nth_unstable_by(upper_in_right, f64::total_cmp);
-    let upper_value = right[upper_in_right];
-    let fraction = rank - usize_to_f64(lower);
-    lower_value.mul_add(1.0 - fraction, upper_value * fraction)
+    epistat_stats::quantile::type7_unsorted(values, q.clamp(0.0, 1.0)).unwrap_or(f64::NAN)
 }
 
-#[inline]
-const fn poly5(x: f64, c0: f64, c1: f64, c2: f64, c3: f64, c4: f64, c5: f64) -> f64 {
-    ((((c0.mul_add(x, c1)).mul_add(x, c2)).mul_add(x, c3)).mul_add(x, c4)).mul_add(x, c5)
-}
-
-#[inline]
-const fn poly4(x: f64, c0: f64, c1: f64, c2: f64, c3: f64, c4: f64) -> f64 {
-    (((c0.mul_add(x, c1)).mul_add(x, c2)).mul_add(x, c3)).mul_add(x, c4)
-}
-
+/// Inverse of the standard normal distribution function (Wichura's AS 241).
 #[inline]
 #[must_use]
 pub fn inverse_standard_normal_cdf(p: f64) -> f64 {
-    const A1: f64 = -3.969_683_028_665_376e1;
-    const A2: f64 = 2.209_460_984_245_205e2;
-    const A3: f64 = -2.759_285_104_469_687e2;
-    const A4: f64 = 1.383_577_518_672_69e2;
-    const A5: f64 = -3.066_479_806_614_716e1;
-    const A6: f64 = 2.506_628_277_459_239;
-
-    const B1: f64 = -5.447_609_879_822_406e1;
-    const B2: f64 = 1.615_858_368_580_409e2;
-    const B3: f64 = -1.556_989_798_598_866e2;
-    const B4: f64 = 6.680_131_188_771_972e1;
-    const B5: f64 = -1.328_068_155_288_572e1;
-
-    const C1: f64 = -7.784_894_002_430_293e-3;
-    const C2: f64 = -3.223_964_580_411_365e-1;
-    const C3: f64 = -2.400_758_277_161_838;
-    const C4: f64 = -2.549_732_539_343_734;
-    const C5: f64 = 4.374_664_141_464_968;
-    const C6: f64 = 2.938_163_982_698_783;
-
-    const D1: f64 = 7.784_695_709_041_462e-3;
-    const D2: f64 = 3.224_671_290_700_398e-1;
-    const D3: f64 = 2.445_134_137_142_996;
-    const D4: f64 = 3.754_408_661_907_416;
-
-    const P_LOW: f64 = 0.024_25;
-    const P_HIGH: f64 = 1.0 - P_LOW;
-
-    if p.is_nan() {
-        return f64::NAN;
-    }
-    if p <= 0.0 {
-        return f64::NEG_INFINITY;
-    }
-    if p >= 1.0 {
-        return f64::INFINITY;
-    }
-
-    if p < P_LOW {
-        let q = (-2.0 * p.ln()).sqrt();
-        let num = poly5(q, C1, C2, C3, C4, C5, C6);
-        let den = poly4(q, D1, D2, D3, D4, 1.0);
-        num / den
-    } else if p <= P_HIGH {
-        let q = p - 0.5;
-        let r = q * q;
-        let num = poly5(r, A1, A2, A3, A4, A5, A6);
-        let den = poly5(r, B1, B2, B3, B4, B5, 1.0);
-        q * (num / den)
-    } else {
-        let q = (-2.0 * (1.0 - p).ln()).sqrt();
-        let num = poly5(q, C1, C2, C3, C4, C5, C6);
-        let den = poly4(q, D1, D2, D3, D4, 1.0);
-        -(num / den)
-    }
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn float_floor_to_usize(value: f64, max: usize) -> usize {
-    if !value.is_finite() || value <= 0.0 {
-        return 0;
-    }
-    let floored = value.floor();
-    if floored >= usize_to_f64(max) {
-        max
-    } else {
-        floored as usize
-    }
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn float_ceil_to_usize(value: f64, max: usize) -> usize {
-    if !value.is_finite() || value <= 0.0 {
-        return 0;
-    }
-    let ceiled = value.ceil();
-    if ceiled >= usize_to_f64(max) {
-        max
-    } else {
-        ceiled as usize
-    }
+    epistat_stats::normal::quantile(p)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::usize_to_f64;
     use rand::{SeedableRng, rngs::StdRng};
 
     fn multiplier_bootstrap_ci_sorted_reference(
@@ -488,11 +265,12 @@ mod tests {
         bootstrap: BootstrapConfig,
     ) -> (f64, f64) {
         let n_f = usize_to_f64(influence_function.len());
-        let mut rng = StdRng::seed_from_u64(bootstrap.seed);
         let mut draws = Vec::with_capacity(bootstrap.reps);
 
-        for _ in 0..bootstrap.reps {
-            let perturbation = rademacher_perturbation_bitpacked(influence_function, &mut rng);
+        for replicate in 0..bootstrap.reps as u64 {
+            let mut stream =
+                epistat_rng::Stream::seeded(epistat_rng::replicate_seed(bootstrap.seed, replicate));
+            let perturbation = epistat_rng::rademacher_sum(influence_function, &mut stream);
             draws.push(estimate + perturbation / n_f);
         }
         draws.sort_by(f64::total_cmp);
@@ -501,6 +279,15 @@ mod tests {
         let lower = quantile_sorted(&draws, alpha / 2.0);
         let upper = quantile_sorted(&draws, 1.0 - alpha / 2.0);
         (lower, upper)
+    }
+
+    fn rademacher_perturbation_scalar(influence_function: &[f64], rng: &mut StdRng) -> f64 {
+        use rand::RngExt;
+
+        influence_function.iter().fold(0.0, |acc, value| {
+            let sign = if rng.random_bool(0.5) { 1.0 } else { -1.0 };
+            acc + sign * value
+        })
     }
 
     use proptest::prelude::*;
@@ -603,6 +390,26 @@ mod tests {
     }
 
     #[test]
+    fn multiplier_bootstrap_ci_does_not_depend_on_threads() {
+        let influence = (0..5_000usize)
+            .map(|index| usize_to_f64(index % 13) - 6.0)
+            .collect::<Vec<_>>();
+        let inference = InferenceConfig::new(0.95);
+        let bootstrap = BootstrapConfig { reps: 300, seed: 5 };
+        let on = |threads: usize| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap()
+                .install(|| multiplier_bootstrap_ci(0.2, &influence, inference, bootstrap))
+        };
+        let one = on(1);
+        let four = on(4);
+        assert_eq!(one.0.to_bits(), four.0.to_bits());
+        assert_eq!(one.1.to_bits(), four.1.to_bits());
+    }
+
+    #[test]
     fn influence_standard_error_matches_reference() {
         let influence = [2.0, -1.0, 0.0, 1.0];
         let se = standard_error_from_influence(&influence);
@@ -652,34 +459,6 @@ mod tests {
     }
 
     #[test]
-    fn float_floor_to_usize_handles_edge_cases() {
-        let max = 10;
-        let larger_than_u32_max = f64::from(u32::MAX) + 1024.0;
-        assert_eq!(float_floor_to_usize(f64::NAN, max), 0);
-        assert_eq!(float_floor_to_usize(-1.0, max), 0);
-        assert_eq!(float_floor_to_usize(f64::INFINITY, max), 0);
-        assert_eq!(float_floor_to_usize(usize_to_f64(max), max), max);
-        assert_eq!(float_floor_to_usize(usize_to_f64(max) - 0.5, max), max - 1);
-        assert_eq!(float_floor_to_usize(0.0, max), 0);
-        assert_eq!(float_floor_to_usize(0.1, max), 0);
-        assert_eq!(float_floor_to_usize(larger_than_u32_max, max), max);
-    }
-
-    #[test]
-    fn float_ceil_to_usize_handles_edge_cases() {
-        let max = 10;
-        let larger_than_u32_max = f64::from(u32::MAX) + 1024.0;
-        assert_eq!(float_ceil_to_usize(f64::NAN, max), 0);
-        assert_eq!(float_ceil_to_usize(-1.0, max), 0);
-        assert_eq!(float_ceil_to_usize(f64::INFINITY, max), 0);
-        assert_eq!(float_ceil_to_usize(usize_to_f64(max), max), max);
-        assert_eq!(float_ceil_to_usize(usize_to_f64(max) - 0.5, max), max);
-        assert_eq!(float_ceil_to_usize(0.0, max), 0);
-        assert_eq!(float_ceil_to_usize(0.1, max), 1);
-        assert_eq!(float_ceil_to_usize(larger_than_u32_max, max), max);
-    }
-
-    #[test]
     fn bitpacked_signs_are_statistically_equivalent_to_scalar_signs() {
         let influence = (0..251usize)
             .map(|index| {
@@ -695,9 +474,9 @@ mod tests {
         let scalar_draws = (0..reps)
             .map(|_| rademacher_perturbation_scalar(&influence, &mut scalar_rng))
             .collect::<Vec<_>>();
-        let mut bitpacked_rng = StdRng::seed_from_u64(seed_bitpacked);
+        let mut bitpacked_stream = epistat_rng::Stream::seeded(seed_bitpacked);
         let bitpacked_draws = (0..reps)
-            .map(|_| rademacher_perturbation_bitpacked(&influence, &mut bitpacked_rng))
+            .map(|_| epistat_rng::rademacher_sum(&influence, &mut bitpacked_stream))
             .collect::<Vec<_>>();
 
         let mean = |draws: &[f64]| draws.iter().sum::<f64>() / usize_to_f64(draws.len());

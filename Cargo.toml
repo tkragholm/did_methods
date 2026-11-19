@@ -22,8 +22,12 @@ hotpath-alloc = ["hotpath", "hotpath/hotpath-alloc"]
 [dependencies]
 bon = "3"
 clarabel = { version = "0.11.1", optional = true }
-# BFGS and Nelder-Mead. A git dependency pinned by `rev` until epistat is on crates.io.
+# Shared numerical crates. Git dependencies pinned by `rev` until epistat is on crates.io.
+epistat-inference = { git = "https://github.com/tkragholm/epistat", rev = "9b49113fb7493846f033694c0034c74eb86c8938" }
+epistat-linalg = { git = "https://github.com/tkragholm/epistat", rev = "9b49113fb7493846f033694c0034c74eb86c8938" }
 epistat-optim = { git = "https://github.com/tkragholm/epistat", rev = "9b49113fb7493846f033694c0034c74eb86c8938" }
+epistat-rng = { git = "https://github.com/tkragholm/epistat", rev = "9b49113fb7493846f033694c0034c74eb86c8938" }
+epistat-stats = { git = "https://github.com/tkragholm/epistat", rev = "9b49113fb7493846f033694c0034c74eb86c8938" }
 dyn-stack = "0.13.2"
 faer = { version = "0.24.0", features = ["nightly", "perf-warn"] }
 itertools = "0.14"

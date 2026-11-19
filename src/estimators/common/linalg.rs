@@ -1,7 +1,7 @@
 //! Small linear-algebra helpers shared by estimator implementations.
 
 use dyn_stack::{MemBuffer, MemStack};
-use faer::Side;
+use epistat_linalg::{Attempt, Method, solve};
 use faer::linalg::cholesky::llt;
 use faer::linalg::cholesky::llt::factor::LltRegularization;
 use faer::prelude::*;
@@ -24,7 +24,7 @@ pub fn ridge_solve_lu(mut a: Mat<f64>, b: &Mat<f64>, lambda: f64) -> Mat<f64> {
 
 /// Solve a dense linear system `A x = b` using Cholesky when possible.
 ///
-/// Fallback chain:
+/// Fallback chain, each attempt running on one thread:
 /// 1. Cholesky (`LLT`) on SPD matrices.
 /// 2. Bunch-Kaufman (`LBLT`) for symmetric-indefinite systems.
 /// 3. Partial-pivot LU if previous attempts are non-finite.
@@ -35,28 +35,7 @@ pub fn ridge_solve_lu(mut a: Mat<f64>, b: &Mat<f64>, lambda: f64) -> Mat<f64> {
 /// - `a.len() != b.len() * b.len()` (shape mismatch), or
 /// - all solve attempts produce non-finite values.
 pub fn solve_spd_system(a: &[f64], b: &[f64]) -> Result<Vec<f64>, &'static str> {
-    let n = b.len();
-    validate_square_system_shape(a, n)?;
-    let system = MatRef::from_row_major_slice(a, n, n);
-    let rhs = MatRef::from_column_major_slice(b, n, 1);
-
-    if let Ok(cholesky) = system.llt(Side::Lower) {
-        let solution = cholesky.solve(&rhs);
-        if let Ok(vec) = collect_solution_column(&solution) {
-            return Ok(vec);
-        }
-    }
-
-    let lblt_solution = system.lblt(Side::Lower).solve(&rhs);
-    if let Ok(vec) = collect_solution_column(&lblt_solution) {
-        return Ok(vec);
-    }
-
-    if let Ok(solution) = solve_general_system(a, b) {
-        return Ok(solution);
-    }
-
-    solve_general_system_robust(a, b)
+    solve_flat(a, b, &Attempt::SYMMETRIC)
 }
 
 /// Solve a dense linear system `A X = B` where `A` is square and `B` may have
@@ -72,45 +51,9 @@ pub fn solve_spd_system_multi_rhs(a: &[f64], rhs: &Mat<f64>) -> Result<Mat<f64>,
     let n = rhs.nrows();
     validate_square_system_shape(a, n)?;
     let system = MatRef::from_row_major_slice(a, n, n);
-
-    if let Ok(cholesky) = system.llt(Side::Lower) {
-        let solution = cholesky.solve(rhs);
-        if matrix_is_finite(&solution) {
-            return Ok(solution);
-        }
-    }
-
-    let lblt_solution = system.lblt(Side::Lower).solve(rhs);
-    if matrix_is_finite(&lblt_solution) {
-        return Ok(lblt_solution);
-    }
-
-    let solution = system.partial_piv_lu().solve(rhs);
-    if matrix_is_finite(&solution) {
-        return Ok(solution);
-    }
-
-    let robust_solution = system.full_piv_lu().solve(rhs);
-    if matrix_is_finite(&robust_solution) {
-        return Ok(robust_solution);
-    }
-
-    Err("dense solve produced a non-finite value")
-}
-
-/// Solve a dense linear system `A x = b` with partial-pivot LU.
-///
-/// # Errors
-/// Returns an error if:
-/// - `a.len() != b.len() * b.len()` (shape mismatch), or
-/// - the resulting solution contains non-finite values.
-pub fn solve_general_system(a: &[f64], b: &[f64]) -> Result<Vec<f64>, &'static str> {
-    let n = b.len();
-    validate_square_system_shape(a, n)?;
-    let system = MatRef::from_row_major_slice(a, n, n);
-    let rhs = MatRef::from_column_major_slice(b, n, 1);
-    let solution = system.partial_piv_lu().solve(rhs);
-    collect_solution_column(&solution)
+    solve(system, rhs.as_ref(), &Attempt::SYMMETRIC)
+        .map(|solution| solution.x)
+        .map_err(|_| NON_FINITE)
 }
 
 /// Solve a dense linear system `A x = b` with robust full-pivot LU.
@@ -122,12 +65,7 @@ pub fn solve_general_system(a: &[f64], b: &[f64]) -> Result<Vec<f64>, &'static s
 /// - `a.len() != b.len() * b.len()` (shape mismatch), or
 /// - the resulting solution contains non-finite values.
 pub fn solve_general_system_robust(a: &[f64], b: &[f64]) -> Result<Vec<f64>, &'static str> {
-    let n = b.len();
-    validate_square_system_shape(a, n)?;
-    let system = MatRef::from_row_major_slice(a, n, n);
-    let rhs = MatRef::from_column_major_slice(b, n, 1);
-    let solution = system.full_piv_lu().solve(rhs);
-    collect_solution_column(&solution)
+    solve_flat(a, b, &[Attempt::plain(Method::FullPivLu)])
 }
 
 /// Solve a dense linear system `A x = b` from flat row-major inputs.
@@ -142,6 +80,17 @@ pub fn solve_general_system_robust(a: &[f64], b: &[f64]) -> Result<Vec<f64>, &'s
 /// - the resulting solution contains non-finite values.
 pub fn solve_dense_system(a: &[f64], b: &[f64]) -> Result<Vec<f64>, &'static str> {
     solve_general_system_robust(a, b)
+}
+
+const NON_FINITE: &str = "dense solve produced a non-finite value";
+
+fn solve_flat(a: &[f64], b: &[f64], attempts: &[Attempt]) -> Result<Vec<f64>, &'static str> {
+    let n = b.len();
+    validate_square_system_shape(a, n)?;
+    let system = MatRef::from_row_major_slice(a, n, n);
+    let rhs = MatRef::from_column_major_slice(b, n, 1);
+    let solution = solve(system, rhs, attempts).map_err(|_| NON_FINITE)?;
+    Ok((0..n).map(|row| solution.x[(row, 0)]).collect())
 }
 
 /// Scratch-backed SPD solver for repeated single-RHS solves with fixed dimension.
@@ -225,28 +174,6 @@ const fn validate_square_system_shape(a: &[f64], n: usize) -> Result<(), &'stati
         return Err("coefficient matrix shape does not match rhs length");
     }
     Ok(())
-}
-
-fn matrix_is_finite(matrix: &Mat<f64>) -> bool {
-    for row in 0..matrix.nrows() {
-        for col in 0..matrix.ncols() {
-            if !matrix[(row, col)].is_finite() {
-                return false;
-            }
-        }
-    }
-    true
-}
-
-fn collect_solution_column(solution: &Mat<f64>) -> Result<Vec<f64>, &'static str> {
-    if !matrix_is_finite(solution) {
-        return Err("dense solve produced a non-finite value");
-    }
-    let mut out = Vec::with_capacity(solution.nrows());
-    for row in 0..solution.nrows() {
-        out.push(solution[(row, 0)]);
-    }
-    Ok(out)
 }
 
 #[cfg(test)]

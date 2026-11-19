@@ -9,7 +9,6 @@ use rand::{RngExt, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 use statrs::distribution::{ContinuousCDF, Normal};
 
-use crate::inference::inverse_standard_normal_cdf;
 use crate::util::usize_to_f64;
 
 pub(super) fn linear_grid(lb: f64, ub: f64, points: usize) -> Vec<f64> {
@@ -711,26 +710,10 @@ pub(super) fn dense_rows_to_csc(rows: &[Vec<f64>]) -> CscMatrix<f64> {
     build_clarabel_matrix(rows, &[])
 }
 
+/// Quantile of a standard normal truncated to `[l, u]`. An interval with no
+/// probability gives 0.
 pub(super) fn truncated_normal_quantile(p: f64, l: f64, u: f64) -> Result<f64, String> {
-    let normal = Normal::new(0.0, 1.0)
-        .map_err(|err| format!("failed to create normal distribution: {err}"))?;
-    let pl = if l.is_infinite() && l.is_sign_negative() {
-        0.0
-    } else {
-        normal.cdf(l)
-    };
-    let pu = if u.is_infinite() && u.is_sign_positive() {
-        1.0
-    } else {
-        normal.cdf(u)
-    };
-    if pu <= pl {
-        return Ok(0.0);
-    }
-    let target = p.mul_add(pu - pl, pl);
-    Ok(inverse_standard_normal_cdf(
-        target.clamp(1e-12, 1.0 - 1e-12),
-    ))
+    Ok(epistat_stats::normal::truncated_quantile(p, l, u).unwrap_or(0.0))
 }
 
 #[cfg(test)]

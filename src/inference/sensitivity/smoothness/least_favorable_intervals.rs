@@ -19,7 +19,6 @@ use clarabel::solver::{
     DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
 };
 use rayon::prelude::*;
-use statrs::distribution::{ContinuousCDF, Normal};
 
 use super::compute_smoothness_identified_set;
 use crate::inference::validate_confidence_level;
@@ -419,35 +418,8 @@ fn find_worst_case_bias_given_h(
 }
 
 fn folded_normal_quantile(p: f64, mu: f64) -> Result<f64, String> {
-    if !(0.0..1.0).contains(&p) {
-        return Err(format!(
-            "folded-normal quantile probability must lie in (0,1), got {p}"
-        ));
-    }
-    let normal = Normal::new(0.0, 1.0)
-        .map_err(|err| format!("failed to create normal distribution: {err}"))?;
-    let mu_abs = mu.abs();
-    let cdf = |q: f64| normal.cdf(q - mu_abs) + normal.cdf(q + mu_abs) - 1.0;
-    let mut lower = 0.0;
-    let mut upper = mu_abs + 8.0;
-    loop {
-        if cdf(upper) >= p {
-            break;
-        }
-        upper *= 2.0;
-        if upper > 1e6 {
-            break;
-        }
-    }
-    for _ in 0..80 {
-        let mid = 0.5 * (lower + upper);
-        if cdf(mid) >= p {
-            upper = mid;
-        } else {
-            lower = mid;
-        }
-    }
-    Ok(upper)
+    epistat_stats::normal::folded_quantile(p, mu)
+        .ok_or_else(|| format!("folded-normal quantile probability must lie in (0,1), got {p}"))
 }
 
 fn half_length_for_bias(alpha: f64, max_bias: f64, h: f64) -> Result<f64, String> {

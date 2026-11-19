@@ -1,7 +1,10 @@
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 
+use epistat_rng::{Stream, replicate_seed};
+
 use crate::inference::{
-    quantile_unsorted, standard_error_from_influence, validate_confidence_level,
+    fill_rademacher_signs, quantile_unsorted, standard_error_from_influence,
+    validate_confidence_level,
 };
 use crate::types::{AttGtBandConfig, AttGtBandError, AttGtBandEstimate, AttGtEstimate};
 use crate::util::usize_to_f64;
@@ -52,13 +55,11 @@ pub fn att_gt_simultaneous_bands_with_influence(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let mut rng = StdRng::seed_from_u64(config.seed);
     let mut maxima = Vec::with_capacity(config.reps);
     let mut signs = vec![1.0; n];
-    for _ in 0..config.reps {
-        for sign in &mut signs {
-            *sign = if rng.random_bool(0.5) { 1.0 } else { -1.0 };
-        }
+    for replicate in 0..config.reps as u64 {
+        let mut stream = Stream::seeded(replicate_seed(config.seed, replicate));
+        fill_rademacher_signs(&mut stream, &mut signs);
         let mut max_abs = 0.0_f64;
         for influence in influence_functions {
             let numerator = influence
@@ -276,7 +277,6 @@ pub fn att_gt_mboot_bands(
 
     let n_f = usize_to_f64(n);
     let clusters_f = usize_to_f64(n_clusters);
-    let mut rng = StdRng::seed_from_u64(config.seed);
     let mut draws = vec![vec![0.0_f64; config.reps]; influence_functions.len()];
     let mut weights = vec![0.0_f64; n_clusters];
 
@@ -286,9 +286,8 @@ pub fn att_gt_mboot_bands(
     // iteration over `draws`.
     #[expect(clippy::needless_range_loop, reason = "rep indexes a second structure")]
     for rep in 0..config.reps {
-        for weight in &mut weights {
-            *weight = if rng.random_bool(0.5) { -1.0 } else { 1.0 };
-        }
+        let mut stream = Stream::seeded(replicate_seed(config.seed, rep as u64));
+        fill_rademacher_signs(&mut stream, &mut weights);
         for (statistic, influence) in clustered.iter().enumerate() {
             // sqrt(n_clusters) * mean over clusters of (V * psi), did's `Ub`.
             let mean = influence
@@ -368,17 +367,6 @@ const NORMAL_IQR: f64 = 1.348_979_500_392_162_4;
 /// so the default type 7 used elsewhere in this crate is not interchangeable
 /// here.
 fn quantile_type1(values: &mut [f64], probability: f64) -> f64 {
-    if values.is_empty() {
-        return f64::NAN;
-    }
     values.sort_by(f64::total_cmp);
-    let n = usize_to_f64(values.len());
-    let position = n * probability;
-    let floor = position.floor();
-    let index = if (position - floor) > 0.0 {
-        floor as usize
-    } else {
-        (floor as usize).saturating_sub(1)
-    };
-    values[index.min(values.len() - 1)]
+    epistat_stats::quantile::type1(values, probability).unwrap_or(f64::NAN)
 }
