@@ -7,14 +7,9 @@ use super::relative_magnitude::{
     compute_relative_magnitude_family_identified_set, geometry::basis_post_weights,
     prepare_relative_magnitude_family_draws,
 };
-use super::smoothness::least_favorable_intervals::{
-    SmoothnessFlciConfig, build_smoothness_flci_problem, compute_smoothness_flci_with_config,
-};
-use super::smoothness::{
-    build_smoothness_constraint_matrix, compute_monotone_smoothness_confidence_set_with_config,
-    compute_signed_smoothness_confidence_set_with_config,
-    compute_smoothness_confidence_set_with_config,
-};
+use super::smoothness::build_smoothness_constraint_matrix;
+use super::smoothness::least_favorable_intervals::SmoothnessFlciConfig;
+use super::solver_tally::SolverCounts;
 use super::{
     HonestBiasDirection, HonestConditionalConfidenceSet, HonestEventStudyInput,
     HonestIdentifiedSet, HonestMonotonicityDirection, HonestOriginalConfidenceSet,
@@ -73,6 +68,11 @@ pub struct SensitivitySummaryRow {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SensitivitySummary {
     pub rows: Vec<SensitivitySummaryRow>,
+    /// Conic programs that needed the retry with looser tolerances, and programs
+    /// that ended `AlmostSolved`, while the summary was computed. See
+    /// [`SolverCounts`]. A summary from `summarize_relative_magnitude_sensitivity_many`
+    /// carries the counts of the whole call.
+    pub solver: SolverCounts,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -307,6 +307,29 @@ pub fn summarize_smoothness_sensitivity(
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
 ) -> Result<SensitivitySummary, String> {
+    summarize_smoothness_sensitivity_counted(
+        input,
+        inference,
+        post_weights,
+        method,
+        m_values,
+        bias_direction,
+        monotonicity_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(in crate::inference::sensitivity) fn summarize_smoothness_sensitivity_counted(
+    input: &HonestEventStudyInput,
+    inference: InferenceConfig,
+    post_weights: &[f64],
+    method: Option<SensitivitySummaryMethod>,
+    m_values: Option<&[f64]>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<SensitivitySummary, String> {
     validate_api_inputs(input, post_weights, inference)?;
     let delta = smoothness_variant_label(bias_direction, monotonicity_direction)?;
     let method =
@@ -325,10 +348,10 @@ pub fn summarize_smoothness_sensitivity(
             }
             let row = match method {
                 SensitivitySummaryMethod::Flci => {
-                    let problem = build_smoothness_flci_problem(input, post_weights, m, inference)?;
-                    let flci = compute_smoothness_flci_with_config(
+                    let problem = crate::inference::sensitivity::smoothness::least_favorable_intervals::build_smoothness_flci_problem_counted(input, post_weights, m, inference, counter)?;
+                    let flci = crate::inference::sensitivity::smoothness::least_favorable_intervals::compute_smoothness_flci_with_config_counted(
                         &problem,
-                        SmoothnessFlciConfig::default_for_production(),
+                        SmoothnessFlciConfig::default_for_production(), counter,
                     )?;
                     SensitivitySummaryRow {
                         lb: flci.flci.0,
@@ -356,31 +379,31 @@ pub fn summarize_smoothness_sensitivity(
                         ..SmoothnessConfidenceSetConfig::from_inference(inference)
                     };
                     let conditional = match (bias_direction, monotonicity_direction) {
-                        (None, None) => compute_smoothness_confidence_set_with_config(
+                        (None, None) => crate::inference::sensitivity::smoothness::compute_smoothness_confidence_set_with_config_counted(
                             input,
                             post_weights,
                             m,
                             inference,
-                            config,
+                            config, counter,
                         )?,
                         (Some(direction), None) => {
-                            compute_signed_smoothness_confidence_set_with_config(
+                            crate::inference::sensitivity::smoothness::compute_signed_smoothness_confidence_set_with_config_counted(
                                 input,
                                 post_weights,
                                 m,
                                 direction,
                                 inference,
-                                config,
+                                config, counter,
                             )?
                         }
                         (None, Some(direction)) => {
-                            compute_monotone_smoothness_confidence_set_with_config(
+                            crate::inference::sensitivity::smoothness::compute_monotone_smoothness_confidence_set_with_config_counted(
                                 input,
                                 post_weights,
                                 m,
                                 direction,
                                 inference,
-                                config,
+                                config, counter,
                             )?
                         }
                         (Some(_), Some(_)) => unreachable!("validated above"),
@@ -391,7 +414,10 @@ pub fn summarize_smoothness_sensitivity(
             Ok(row)
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(SensitivitySummary { rows })
+    Ok(SensitivitySummary {
+        rows,
+        solver: counter.counts(),
+    })
 }
 
 /// Summarize relative-magnitude sensitivity intervals over an `Mbar` grid for
@@ -414,7 +440,32 @@ pub fn summarize_relative_magnitude_sensitivity(
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
 ) -> Result<SensitivitySummary, String> {
-    let mut summaries = summarize_relative_magnitude_sensitivity_many(
+    summarize_relative_magnitude_sensitivity_counted(
+        input,
+        inference,
+        post_weights,
+        method,
+        mbar_values,
+        bound,
+        bias_direction,
+        monotonicity_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(in crate::inference::sensitivity) fn summarize_relative_magnitude_sensitivity_counted(
+    input: &HonestEventStudyInput,
+    inference: InferenceConfig,
+    post_weights: &[f64],
+    method: Option<SensitivitySummaryMethod>,
+    mbar_values: Option<&[f64]>,
+    bound: Option<HonestRelativeMagnitudeBound>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<SensitivitySummary, String> {
+    let mut summaries = summarize_relative_magnitude_sensitivity_many_counted(
         input,
         inference,
         &[post_weights],
@@ -423,6 +474,7 @@ pub fn summarize_relative_magnitude_sensitivity(
         bound,
         bias_direction,
         monotonicity_direction,
+        counter,
     )?;
     Ok(summaries.remove(0))
 }
@@ -452,6 +504,31 @@ pub fn summarize_relative_magnitude_sensitivity_many(
     bound: Option<HonestRelativeMagnitudeBound>,
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
+) -> Result<Vec<SensitivitySummary>, String> {
+    summarize_relative_magnitude_sensitivity_many_counted(
+        input,
+        inference,
+        functionals,
+        method,
+        mbar_values,
+        bound,
+        bias_direction,
+        monotonicity_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(in crate::inference::sensitivity) fn summarize_relative_magnitude_sensitivity_many_counted(
+    input: &HonestEventStudyInput,
+    inference: InferenceConfig,
+    functionals: &[&[f64]],
+    method: Option<SensitivitySummaryMethod>,
+    mbar_values: Option<&[f64]>,
+    bound: Option<HonestRelativeMagnitudeBound>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Vec<SensitivitySummary>, String> {
     for post_weights in functionals {
         validate_api_inputs(input, post_weights, inference)?;
@@ -512,6 +589,7 @@ pub fn summarize_relative_magnitude_sensitivity_many(
                     mbar,
                     family,
                     config.least_favorable_draws,
+                    config.least_favorable_seed,
                 )?)
             }
             RelativeMagnitudeHybrid::ArpOnly => None,
@@ -520,56 +598,64 @@ pub fn summarize_relative_magnitude_sensitivity_many(
             .par_iter()
             .zip(originals.par_iter())
             .map(|(post_weights, original)| {
-                // Solved once and threaded through. The confidence set is built
-                // around the identified set, so computing it here and handing
-                // it on is not an optimisation of the wrapper so much as the
-                // removal of a second solve of the same LPs one call further
-                // down.
-                let identified = compute_relative_magnitude_family_identified_set(
-                    input,
-                    post_weights,
-                    mbar,
-                    family,
-                )?;
-                let conditional =
-                    compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
+                {
+                    // Solved once and threaded through. The confidence set is built
+                    // around the identified set, so computing it here and handing
+                    // it on is not an optimisation of the wrapper so much as the
+                    // removal of a second solve of the same LPs one call further
+                    // down.
+                    let identified = compute_relative_magnitude_family_identified_set(
                         input,
                         post_weights,
                         mbar,
-                        inference,
-                        config,
-                        original,
-                        &identified,
                         family,
-                        shared_draws.as_deref(),
-                    )
-                    .or_else(|err| {
-                        if identified.lb.is_finite() && identified.ub.is_finite() {
-                            Err(err)
-                        } else {
-                            Ok(HonestConditionalConfidenceSet {
-                                lb: identified.lb,
-                                ub: identified.ub,
-                            })
-                        }
-                    })?;
-                Ok(collect_interval(
-                    &conditional,
-                    method,
-                    delta,
-                    "Mbar",
-                    mbar,
-                    Some(identified),
-                ))
+                        counter,
+                    )?;
+                    let conditional =
+                        compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
+                            input,
+                            post_weights,
+                            mbar,
+                            inference,
+                            config,
+                            original,
+                            &identified,
+                            family,
+                            shared_draws.as_deref(),
+                            counter,
+                        )
+                        .or_else(|err| {
+                            if identified.lb.is_finite() && identified.ub.is_finite() {
+                                Err(err)
+                            } else {
+                                Ok(HonestConditionalConfidenceSet {
+                                    lb: identified.lb,
+                                    ub: identified.ub,
+                                })
+                            }
+                        })?;
+                    Ok(collect_interval(
+                        &conditional,
+                        method,
+                        delta,
+                        "Mbar",
+                        mbar,
+                        Some(identified),
+                    ))
+                }
             })
             .collect::<Result<Vec<_>, String>>()?;
         for (target, row) in rows.iter_mut().zip(at_this_mbar) {
             target.push(row);
         }
     }
+    let solver_counts = counter.counts();
     Ok(rows
         .into_iter()
-        .map(|rows| SensitivitySummary { rows })
+        .map(|rows| SensitivitySummary {
+            rows,
+            solver: solver_counts,
+        })
         .collect())
 }
 
@@ -591,6 +677,33 @@ pub fn summarize_post_period_sensitivity(
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
 ) -> Result<PostPeriodSensitivitySummary, String> {
+    summarize_post_period_sensitivity_counted(
+        input,
+        post_period,
+        sensitivity_type,
+        inference,
+        method,
+        sensitivity_values,
+        bound,
+        bias_direction,
+        monotonicity_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(in crate::inference::sensitivity) fn summarize_post_period_sensitivity_counted(
+    input: &HonestEventStudyInput,
+    post_period: i32,
+    sensitivity_type: SensitivityRestrictionKind,
+    inference: InferenceConfig,
+    method: Option<SensitivitySummaryMethod>,
+    sensitivity_values: Option<&[f64]>,
+    bound: Option<HonestRelativeMagnitudeBound>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<PostPeriodSensitivitySummary, String> {
     input.validate()?;
     let Some(post_idx) = input
         .post_periods
@@ -604,7 +717,7 @@ pub fn summarize_post_period_sensitivity(
     let post_weights = basis_post_weights(input.num_post_periods(), post_idx);
     let orig_ci = compute_original_confidence_set(input, &post_weights, inference)?;
     let robust_ci = match sensitivity_type {
-        SensitivityRestrictionKind::Smoothness => summarize_smoothness_sensitivity(
+        SensitivityRestrictionKind::Smoothness => summarize_smoothness_sensitivity_counted(
             input,
             inference,
             &post_weights,
@@ -612,17 +725,21 @@ pub fn summarize_post_period_sensitivity(
             sensitivity_values,
             bias_direction,
             monotonicity_direction,
+            counter,
         )?,
-        SensitivityRestrictionKind::RelativeMagnitude => summarize_relative_magnitude_sensitivity(
-            input,
-            inference,
-            &post_weights,
-            method,
-            sensitivity_values,
-            bound,
-            bias_direction,
-            monotonicity_direction,
-        )?,
+        SensitivityRestrictionKind::RelativeMagnitude => {
+            summarize_relative_magnitude_sensitivity_counted(
+                input,
+                inference,
+                &post_weights,
+                method,
+                sensitivity_values,
+                bound,
+                bias_direction,
+                monotonicity_direction,
+                counter,
+            )?
+        }
     };
     Ok(PostPeriodSensitivitySummary {
         robust_ci,

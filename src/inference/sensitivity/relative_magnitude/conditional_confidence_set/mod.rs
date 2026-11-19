@@ -64,6 +64,7 @@ pub(in crate::inference::sensitivity) struct RelativeMagnitudeConditionalBranch<
     pub(in crate::inference::sensitivity) hybrid: RelativeMagnitudeHybrid,
     pub(in crate::inference::sensitivity) hybrid_kappa: f64,
     pub(in crate::inference::sensitivity) least_favorable_draws: usize,
+    pub(in crate::inference::sensitivity) least_favorable_seed: u64,
     pub(in crate::inference::sensitivity) grid: &'a [f64],
     pub(in crate::inference::sensitivity) anchor_idx: usize,
 }
@@ -78,7 +79,7 @@ pub(in crate::inference::sensitivity) struct RelativeMagnitudePreparedFunctional
     pub(in crate::inference::sensitivity) a_target_arp: Vec<f64>,
     pub(in crate::inference::sensitivity) x_arp: Vec<Vec<f64>>,
     pub(in crate::inference::sensitivity) w_t: Vec<Vec<f64>>,
-    least_favorable_cv_cache: OnceMap<(u64, usize), Result<f64, String>>,
+    least_favorable_cv_cache: OnceMap<(u64, usize, u64), Result<f64, String>>,
 }
 
 impl RelativeMagnitudePreparedFunctionalBranch {
@@ -87,16 +88,11 @@ impl RelativeMagnitudePreparedFunctionalBranch {
         sigma_arp: &[Vec<f64>],
         hybrid_kappa: f64,
         draws: usize,
+        seed: u64,
     ) -> Result<f64, String> {
-        let cache_key = (normalized_f64_bits(hybrid_kappa), draws);
+        let cache_key = (normalized_f64_bits(hybrid_kappa), draws, seed);
         self.least_favorable_cv_cache.insert_cloned(cache_key, |_| {
-            compute_least_favorable_cv_uncached(
-                &self.x_arp,
-                sigma_arp,
-                hybrid_kappa,
-                draws,
-                LEAST_FAVORABLE_SEED,
-            )
+            compute_least_favorable_cv_uncached(&self.x_arp, sigma_arp, hybrid_kappa, draws, seed)
         })
     }
 }
@@ -288,7 +284,11 @@ impl<'a> RelativeMagnitudeThetaEvaluator<'a> {
     }
 
     #[cfg_attr(feature = "hotpath", hotpath::measure)]
-    fn accepts(&mut self, theta: f64) -> Result<bool, String> {
+    fn accepts(
+        &mut self,
+        theta: f64,
+        counter: &crate::inference::sensitivity::SolverCounter,
+    ) -> Result<bool, String> {
         self.shift_to(theta);
         relative_magnitude_lp_conditional_test_prepared(
             &self.shifted_y_arp,
@@ -310,6 +310,7 @@ impl<'a> RelativeMagnitudeThetaEvaluator<'a> {
             &mut self.v_b_scratch,
             &mut self.inv_m_scratch,
             &mut self.rho_tmp_scratch,
+            counter,
         )
         .map(|rejected| !rejected)
     }
@@ -380,11 +381,13 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_identified_s
     input: &HonestEventStudyInput,
     post_weights: &[f64],
     prepared_branches: &[RelativeMagnitudePreparedBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestIdentifiedSet, String> {
     let branch_sets = compute_relative_magnitude_branch_identified_sets_with_prepared_branches(
         input,
         post_weights,
         prepared_branches,
+        counter,
     )?;
     global_identified_set_from_branch_identified_sets(input, post_weights, &branch_sets)
 }
@@ -393,6 +396,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_ident
     input: &HonestEventStudyInput,
     post_weights: &[f64],
     prepared_branches: &[RelativeMagnitudePreparedBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Vec<Option<HonestIdentifiedSet>>, String> {
     let num_pre = input.num_pre_periods();
     let num_post = input.num_post_periods();
@@ -419,8 +423,8 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_ident
                 &branch.cones,
                 &objective,
             )?;
-            let max_solution = workspace.solve_with_q(&max_q)?;
-            let min_solution = workspace.solve_with_q(&objective)?;
+            let max_solution = workspace.solve_with_q(&max_q, counter)?;
+            let min_solution = workspace.solve_with_q(&objective, counter)?;
             Ok(match (max_solution, min_solution) {
                 (Some(maximum), Some(minimum)) => Some(HonestIdentifiedSet {
                     lb: target_estimate - maximum,
@@ -515,12 +519,14 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_identified_s
     input: &HonestEventStudyInput,
     post_idx: usize,
     prepared_branches: &[RelativeMagnitudePreparedBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestIdentifiedSet, String> {
     let post_weights = super::geometry::basis_post_weights(input.num_post_periods(), post_idx);
     compute_relative_magnitude_identified_set_with_prepared_branches(
         input,
         &post_weights,
         prepared_branches,
+        counter,
     )
 }
 
@@ -532,6 +538,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
     config: RelativeMagnitudeConfidenceSetConfig,
     prepared_branches: &[RelativeMagnitudePreparedBranch],
     prepared_input_branches: &[RelativeMagnitudePreparedInputBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     if prepared_branches.len() != prepared_input_branches.len() {
         return Err(format!(
@@ -546,6 +553,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
         input,
         post_idx,
         prepared_branches,
+        counter,
     )?;
     let (grid_lower, grid_upper) = super::grid_bounds_around_identified_set(&original, &identified);
     let grid_points = 1_000usize;
@@ -556,6 +564,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
             input,
             &post_weights,
             prepared_branches,
+            counter,
         )?;
     let mut global_range: Option<AcceptedGridRange> = None;
     let mut theta_summary = ThetaSearchSummary::default();
@@ -583,6 +592,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
                     &prepared_input.sigma_arp,
                     config.hybrid_kappa,
                     config.least_favorable_draws,
+                    config.least_favorable_seed,
                 )?,
                 RelativeMagnitudeHybrid::ArpOnly => f64::INFINITY,
             };
@@ -611,6 +621,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
             alpha,
             config.hybrid_kappa,
             *lf_cv,
+            counter,
         )?;
         theta_summary.record(range, diagnostics, grid.len());
         if let Some(range) = range {
@@ -673,6 +684,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
         prepared_branches,
         prepared_input_branches,
         &prepared_functional_branches,
+        &crate::inference::sensitivity::SolverCounter::new(),
     )
 }
 
@@ -692,12 +704,14 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
     prepared_branches: &[RelativeMagnitudePreparedBranch],
     prepared_input_branches: &[RelativeMagnitudePreparedInputBranch],
     prepared_functional_branches: &[RelativeMagnitudePreparedFunctionalBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     let branch_identified_sets =
         compute_relative_magnitude_branch_identified_sets_with_prepared_branches(
             input,
             post_weights,
             prepared_branches,
+            counter,
         )?;
     compute_relative_magnitude_confidence_set_with_prepared_functional_branches_and_identified_sets(
         input,
@@ -710,6 +724,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
         prepared_input_branches,
         prepared_functional_branches,
         &branch_identified_sets,
+        counter,
     )
 }
 
@@ -729,6 +744,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
     prepared_input_branches: &[RelativeMagnitudePreparedInputBranch],
     prepared_functional_branches: &[RelativeMagnitudePreparedFunctionalBranch],
     branch_identified_sets: &[Option<HonestIdentifiedSet>],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     if prepared_functional_branches.len() != prepared_input_branches.len() {
         return Err(format!(
@@ -764,6 +780,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
                 &prepared_input.sigma_arp,
                 config.hybrid_kappa,
                 config.least_favorable_draws,
+                config.least_favorable_seed,
             )?,
             RelativeMagnitudeHybrid::ArpOnly => f64::INFINITY,
         };
@@ -779,6 +796,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
             alpha,
             config.hybrid_kappa,
             lf_cv,
+            counter,
         )?;
         theta_summary.record(range, diagnostics, grid.len());
         if let Some(range) = range {
@@ -837,6 +855,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
                 &prepared_input.sigma_arp,
                 config.hybrid_kappa,
                 config.least_favorable_draws,
+                config.least_favorable_seed,
             )?,
             RelativeMagnitudeHybrid::ArpOnly => f64::INFINITY,
         };
@@ -883,15 +902,13 @@ pub(in crate::inference::sensitivity) fn prepare_relative_magnitude_branch_draws
     num_pre: usize,
     a_matrix: &[Vec<f64>],
     draws: usize,
+    seed: u64,
 ) -> Result<Vec<f64>, String> {
     let rows_for_arp = find_post_period_constraint_rows(a_matrix, num_pre);
     let sigma_y = sandwich_covariance(a_matrix, &input.covariance);
     let sigma_arp = super::super::linear_algebra::subset_square_matrix(&sigma_y, &rows_for_arp);
-    simulation_draws(&sigma_arp, draws, LEAST_FAVORABLE_SEED)
+    simulation_draws(&sigma_arp, draws, seed)
 }
-
-/// Seed of every least-favorable simulation on this path.
-const LEAST_FAVORABLE_SEED: u64 = 0;
 
 /// `shared_draws` are this branch's draws from
 /// [`prepare_relative_magnitude_branch_draws`]; without them the simulation
@@ -900,6 +917,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_accep
     branch_problem: &RelativeMagnitudeConditionalBranch<'_>,
     a_matrix: &[Vec<f64>],
     shared_draws: Option<&[f64]>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Option<AcceptedGridRange>, String> {
     let rows_for_arp = find_post_period_constraint_rows(a_matrix, branch_problem.num_pre);
     let a_post: Vec<Vec<f64>> = a_matrix
@@ -936,7 +954,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_accep
             &sigma_arp,
             branch_problem.hybrid_kappa,
             branch_problem.least_favorable_draws,
-            LEAST_FAVORABLE_SEED,
+            branch_problem.least_favorable_seed,
         )?,
         (RelativeMagnitudeHybrid::ArpOnly, _) => f64::INFINITY,
     };
@@ -952,6 +970,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_accep
         branch_problem.alpha,
         branch_problem.hybrid_kappa,
         lf_cv,
+        counter,
     )
     .map(|(range, _)| range)
 }
@@ -977,6 +996,7 @@ fn compute_relative_magnitude_branch_accepted_range_for_branch(
     alpha: f64,
     hybrid_kappa: f64,
     lf_cv: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<(Option<AcceptedGridRange>, AdaptiveGridDiagnostics), String> {
     let mut evaluator = RelativeMagnitudeThetaEvaluator::new(
         y_arp_base,
@@ -989,11 +1009,16 @@ fn compute_relative_magnitude_branch_accepted_range_for_branch(
         hybrid_kappa,
         lf_cv,
     )?;
-    let anchor_idx = better_anchor_idx(grid, anchor_idx, &mut evaluator)?;
+    let anchor_idx = better_anchor_idx(grid, anchor_idx, &mut evaluator, counter)?;
     let Some(anchor_idx) = anchor_idx else {
         return Ok((None, AdaptiveGridDiagnostics::default()));
     };
-    compute_relative_magnitude_branch_accepted_range_adaptive(grid, anchor_idx, &mut evaluator)
+    compute_relative_magnitude_branch_accepted_range_adaptive(
+        grid,
+        anchor_idx,
+        &mut evaluator,
+        counter,
+    )
 }
 
 /// Where the acceptance search should start, and whether it is worth starting.
@@ -1021,9 +1046,10 @@ fn better_anchor_idx(
     grid: &[f64],
     anchor_idx: usize,
     evaluator: &mut RelativeMagnitudeThetaEvaluator<'_>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Option<usize>, String> {
     let anchor_idx = anchor_idx.min(grid.len() - 1);
-    if evaluator.accepts(grid[anchor_idx])? {
+    if evaluator.accepts(grid[anchor_idx], counter)? {
         return Ok(Some(anchor_idx));
     }
     let (best_idx, best_eta) = evaluator.argmin_eta(grid)?;
@@ -1038,9 +1064,10 @@ fn compute_relative_magnitude_branch_accepted_range_adaptive(
     grid: &[f64],
     anchor_idx: usize,
     evaluator: &mut RelativeMagnitudeThetaEvaluator<'_>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<(Option<AcceptedGridRange>, AdaptiveGridDiagnostics), String> {
     compute_accepted_grid_range_adaptive_with_diagnostics(grid, anchor_idx, |theta| {
-        evaluator.accepts(theta)
+        evaluator.accepts(theta, counter)
     })
 }
 
@@ -1049,7 +1076,9 @@ fn compute_relative_magnitude_branch_accepted_range_full_grid(
     grid: &[f64],
     evaluator: &mut RelativeMagnitudeThetaEvaluator<'_>,
 ) -> Result<Option<AcceptedGridRange>, String> {
-    compute_accepted_grid_range_full_grid(grid, |theta| evaluator.accepts(theta))
+    compute_accepted_grid_range_full_grid(grid, |theta| {
+        evaluator.accepts(theta, &crate::inference::sensitivity::SolverCounter::new())
+    })
 }
 
 /// Whether a branch is infeasible on its pre-period rows alone.
@@ -1081,6 +1110,7 @@ pub(in crate::inference::sensitivity) fn solve_relative_magnitude_branch_with_ma
     true_beta: &[f64],
     post_weights: &[f64],
     inequality_matrix: &[Vec<f64>],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Option<HonestIdentifiedSet>, String> {
     let target_estimate = post_weights
         .iter()
@@ -1109,8 +1139,8 @@ pub(in crate::inference::sensitivity) fn solve_relative_magnitude_branch_with_ma
         &objective,
     )?;
     let max_q: Vec<f64> = objective.iter().map(|value| -*value).collect();
-    let max_solution = workspace.solve_with_q(&max_q)?;
-    let min_solution = workspace.solve_with_q(&objective)?;
+    let max_solution = workspace.solve_with_q(&max_q, counter)?;
+    let min_solution = workspace.solve_with_q(&objective, counter)?;
 
     match (max_solution, min_solution) {
         (Some(maximum), Some(minimum)) => Ok(Some(HonestIdentifiedSet {
@@ -1143,6 +1173,7 @@ fn relative_magnitude_lp_conditional_test_prepared(
     v_b_scratch: &mut Vec<f64>,
     inv_m_scratch: &mut Vec<f64>,
     rho_tmp_scratch: &mut Vec<f64>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<bool, String> {
     let started = Instant::now();
     let lp_started = Instant::now();
@@ -1170,6 +1201,7 @@ fn relative_magnitude_lp_conditional_test_prepared(
             dual_workspace,
             sigma_gamma_scratch,
             s_t_scratch,
+            counter,
         )?;
         let dual_ms = dual_started.elapsed().as_millis();
         let total_ms = started.elapsed().as_millis();
@@ -1242,6 +1274,7 @@ fn relative_magnitude_lp_conditional_test_prepared(
             dual_workspace,
             sigma_gamma_scratch,
             s_t_scratch,
+            counter,
         )?;
         let dual_ms = dual_started.elapsed().as_millis();
         let total_ms = started.elapsed().as_millis();

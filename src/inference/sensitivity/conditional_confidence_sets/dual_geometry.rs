@@ -27,6 +27,7 @@ pub(in crate::inference::sensitivity) struct DualAcceptanceRegion {
     pub(in crate::inference::sensitivity) vup: f64,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::inference::sensitivity) fn dual_acceptance_region(
     y_arp: &[f64],
     sigma_arp: &[Vec<f64>],
@@ -35,6 +36,7 @@ pub(in crate::inference::sensitivity) fn dual_acceptance_region(
     dual_workspace: &mut DualMaxLpWorkspace,
     sigma_gamma_scratch: &mut Vec<f64>,
     s_t_scratch: &mut Vec<f64>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Option<DualAcceptanceRegion>, String> {
     sigma_gamma_scratch.resize(y_arp.len(), 0.0);
     for (row_idx, sigma_row) in sigma_arp.iter().enumerate() {
@@ -60,6 +62,7 @@ pub(in crate::inference::sensitivity) fn dual_acceptance_region(
         sigma_gamma_scratch,
         sigma_b2,
         dual_workspace,
+        counter,
     )?;
     Ok(Some(DualAcceptanceRegion {
         sigma_b,
@@ -80,6 +83,7 @@ pub(in crate::inference::sensitivity) fn dual_conditional_test(
     dual_workspace: &mut DualMaxLpWorkspace,
     sigma_gamma_scratch: &mut Vec<f64>,
     s_t_scratch: &mut Vec<f64>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<bool, String> {
     let Some(region) = dual_acceptance_region(
         y_arp,
@@ -89,6 +93,7 @@ pub(in crate::inference::sensitivity) fn dual_conditional_test(
         dual_workspace,
         sigma_gamma_scratch,
         s_t_scratch,
+        counter,
     )?
     else {
         return Ok(eta_star > 0.0);
@@ -263,6 +268,7 @@ fn compute_dual_vlo_vup(
     sigma_gamma: &[f64],
     sigma_b2: f64,
     workspace: &mut DualMaxLpWorkspace,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<(f64, f64), String> {
     let sigma_b = sigma_b2.max(0.0).sqrt();
     let low_initial = (-100.0_f64).min(20.0f64.mul_add(-sigma_b, eta));
@@ -274,6 +280,7 @@ fn compute_dual_vlo_vup(
         sigma_gamma,
         sigma_b2,
         workspace,
+        counter,
     )? {
         return Ok((eta, f64::INFINITY));
     }
@@ -285,6 +292,7 @@ fn compute_dual_vlo_vup(
         sigma_gamma,
         sigma_b2,
         workspace,
+        counter,
     )? {
         f64::INFINITY
     } else {
@@ -296,6 +304,7 @@ fn compute_dual_vlo_vup(
             sigma_gamma,
             sigma_b2,
             workspace,
+            counter,
         )?
     };
 
@@ -306,6 +315,7 @@ fn compute_dual_vlo_vup(
         sigma_gamma,
         sigma_b2,
         workspace,
+        counter,
     )? {
         f64::NEG_INFINITY
     } else {
@@ -317,11 +327,13 @@ fn compute_dual_vlo_vup(
             sigma_gamma,
             sigma_b2,
             workspace,
+            counter,
         )?
     };
     Ok((vlo, vup))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn bisect_dual_boundary(
     mut high: f64,
     mut low: f64,
@@ -330,6 +342,7 @@ fn bisect_dual_boundary(
     sigma_gamma: &[f64],
     sigma_b2: f64,
     workspace: &mut DualMaxLpWorkspace,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<f64, String> {
     for _ in 0..10_000 {
         if (high - low).abs() <= DUAL_BOUNDARY_TOL {
@@ -343,6 +356,7 @@ fn bisect_dual_boundary(
             sigma_gamma,
             sigma_b2,
             workspace,
+            counter,
         )?;
         if low_is_solution {
             if honest {
@@ -366,14 +380,16 @@ fn check_dual_solution(
     sigma_gamma: &[f64],
     sigma_b2: f64,
     workspace: &mut DualMaxLpWorkspace,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<bool, String> {
-    let optimum = workspace.solve_for_c(s_t, sigma_gamma, sigma_b2, c)?;
+    let optimum = workspace.solve_for_c(s_t, sigma_gamma, sigma_b2, c, counter)?;
     Ok((c - optimum).abs() <= tol)
 }
 
 pub(super) fn solve_dual_max_with_clarabel_fallback(
     w_t: &[Vec<f64>],
     f: &[f64],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<f64, String> {
     let dim = w_t.len();
     let width = w_t.first().map_or(0, Vec::len);
@@ -405,6 +421,7 @@ pub(super) fn solve_dual_max_with_clarabel_fallback(
     let mut solver = DefaultSolver::new(&quadratic, &q, &constraint_matrix, &rhs, &cones, settings)
         .map_err(|err| format!("failed to initialize Clarabel dual max LP: {err}"))?;
     solver.solve();
+    counter.note_status(solver.solution.status);
     match solver.solution.status {
         SolverStatus::Solved | SolverStatus::AlmostSolved => Ok(dot(&solver.solution.x, f)),
         SolverStatus::PrimalInfeasible

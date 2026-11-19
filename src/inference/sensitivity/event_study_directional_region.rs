@@ -13,6 +13,7 @@ use crate::inference::validate_confidence_level;
 use crate::types::InferenceConfig;
 use crate::util::usize_to_f64;
 use rayon::prelude::*;
+
 use std::time::Instant;
 use tracing::debug;
 
@@ -194,6 +195,29 @@ pub fn assess_honest_event_study_directional_region_with_config(
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
     joint_config: HonestJointPathConfig,
 ) -> Result<HonestDirectionalRegion, String> {
+    assess_honest_event_study_directional_region_with_config_counted(
+        input,
+        directions,
+        sensitivity,
+        inference,
+        null_value,
+        relative_magnitude_config,
+        joint_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_region_with_config_counted(
+    input: &HonestEventStudyInput,
+    directions: &[Vec<f64>],
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
+    joint_config: HonestJointPathConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestDirectionalRegion, String> {
     assess_honest_event_study_directional_region_with_optional_prepared_relative_magnitude(
         input,
         directions,
@@ -203,6 +227,7 @@ pub fn assess_honest_event_study_directional_region_with_config(
         relative_magnitude_config,
         joint_config,
         None,
+        counter,
     )
 }
 
@@ -217,6 +242,7 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
     joint_config: HonestJointPathConfig,
     prepared_relative_magnitude: Option<&super::super::PreparedRelativeMagnitudeBaseContext>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestDirectionalRegion, String> {
     let calibrate_started = Instant::now();
     let (pointwise_confidence_level, calibrated_max_t_critical_value) =
@@ -238,6 +264,7 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
         inference.confidence_level,
         pointwise_confidence_level,
         calibrated_max_t_critical_value,
+        counter,
     )
 }
 
@@ -253,6 +280,7 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
     confidence_level: f64,
     pointwise_confidence_level: f64,
     calibrated_max_t_critical_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestDirectionalRegion, String> {
     let total_started = Instant::now();
     let pointwise_inference = InferenceConfig::new(pointwise_confidence_level);
@@ -277,11 +305,13 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
                 directions
                     .par_iter()
                     .map(|direction| {
-                        super::super::prepare_relative_magnitude_functional_branches(
-                            direction,
-                            &prepared.branches,
-                            &prepared.input_branches,
-                        )
+                        {
+                            super::super::prepare_relative_magnitude_functional_branches(
+                                direction,
+                                &prepared.branches,
+                                &prepared.input_branches,
+                            )
+                        }
                     })
                     .collect::<Result<Vec<_>, String>>()?,
             ),
@@ -312,9 +342,10 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
                                 hybrid: relative_magnitude_config.hybrid,
                                 hybrid_kappa: pointwise_relative_magnitude_config.hybrid_kappa,
  least_favorable_draws: relative_magnitude_config.least_favorable_draws,
+                            least_favorable_seed: relative_magnitude_config.least_favorable_seed,
                             },
                             &prepared.branches,
-                            &prepared.input_branches,
+                            &prepared.input_branches, counter,
                         )?
                     }
                     None => super::super::assess_relative_magnitude_functional_with_prepared_functional_branches(
@@ -327,21 +358,22 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
                             hybrid: relative_magnitude_config.hybrid,
                             hybrid_kappa: pointwise_relative_magnitude_config.hybrid_kappa,
  least_favorable_draws: relative_magnitude_config.least_favorable_draws,
+                            least_favorable_seed: relative_magnitude_config.least_favorable_seed,
                         },
                         &prepared.branches,
                         &prepared.input_branches,
                         &prepared_functional_branch_sets
                             .as_ref()
-                            .ok_or("missing prepared functional branch sets")?[direction_index],
+                            .ok_or("missing prepared functional branch sets")?[direction_index], counter,
                     )?,
                 },
-                None => super::super::assess_honest_event_study_functional_with_config(
+                None => super::super::assess_honest_event_study_functional_with_config_counted(
                     input,
                     direction,
                     sensitivity,
                     pointwise_inference,
                     null_value,
-                    relative_magnitude_config,
+                    relative_magnitude_config, counter,
                 )?,
             };
             Ok(HonestDirectionalFunctionalPoint {
@@ -369,7 +401,8 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
         calibrated_max_t_critical_value,
         method,
         points,
-        diagnostics: HonestDirectionalRegionDiagnostics::fixed(directions.len(), 0),
+        diagnostics: HonestDirectionalRegionDiagnostics::fixed(directions.len(), 0)
+            .with_solver_counts(counter.counts()),
     })
 }
 
@@ -385,7 +418,25 @@ pub fn assess_honest_event_study_directional_region(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestDirectionalRegion, String> {
-    assess_honest_event_study_directional_region_with_config(
+    assess_honest_event_study_directional_region_counted(
+        input,
+        directions,
+        sensitivity,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_region_counted(
+    input: &HonestEventStudyInput,
+    directions: &[Vec<f64>],
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestDirectionalRegion, String> {
+    assess_honest_event_study_directional_region_with_config_counted(
         input,
         directions,
         sensitivity,
@@ -393,5 +444,6 @@ pub fn assess_honest_event_study_directional_region(
         null_value,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
         HonestJointPathConfig::default_for_production(),
+        counter,
     )
 }

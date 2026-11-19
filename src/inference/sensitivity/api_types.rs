@@ -1,3 +1,4 @@
+use super::solver_tally::SolverCounts;
 use crate::types::InferenceConfig;
 
 /// Sensitivity restrictions for `HonestDiD` robustness analysis.
@@ -205,8 +206,11 @@ pub struct RelativeMagnitudeConfidenceSetConfig {
     /// First-stage hybrid size parameter `κ`.
     pub hybrid_kappa: f64,
     /// Number of simulated draws behind the least-favorable critical value.
-    /// The default is 1,000, the value `HonestDiD` uses. The seed is fixed at 0.
+    /// The default is 1,000, the value `HonestDiD` uses.
     pub least_favorable_draws: usize,
+    /// Seed of the simulation behind the least-favorable critical value. The
+    /// default is 0, the seed of the `HonestDiD` default.
+    pub least_favorable_seed: u64,
 }
 
 impl RelativeMagnitudeConfidenceSetConfig {
@@ -235,6 +239,7 @@ impl RelativeMagnitudeConfidenceSetConfig {
             hybrid: RelativeMagnitudeHybrid::LeastFavorable,
             hybrid_kappa: (1.0 - inference.confidence_level) / 10.0,
             least_favorable_draws: 1_000,
+            least_favorable_seed: 0,
         }
     }
 
@@ -401,6 +406,14 @@ pub struct HonestDirectionalRegionDiagnostics {
     pub iterations_run: usize,
     /// Whether adaptive enrichment reported convergence before hitting limits.
     pub converged: bool,
+    /// Conic programs that needed the retry with looser tolerances while the
+    /// region was computed, adaptive iterations included. A retried program is
+    /// solved to `1e-6` or `1e-7` instead of `1e-8`. The count covers every
+    /// thread of the process that ran sensitivity computations meanwhile.
+    pub solver_retries: usize,
+    /// Conic programs whose final status was Clarabel's `AlmostSolved`, counted
+    /// over the same span as `solver_retries`.
+    pub solver_almost_solved: usize,
 }
 
 impl HonestDirectionalRegionDiagnostics {
@@ -411,7 +424,17 @@ impl HonestDirectionalRegionDiagnostics {
             random_direction_count,
             iterations_run: 1,
             converged: true,
+            solver_retries: 0,
+            solver_almost_solved: 0,
         }
+    }
+
+    /// The same diagnostics with the solver counts of a computation.
+    #[must_use]
+    pub const fn with_solver_counts(mut self, counts: SolverCounts) -> Self {
+        self.solver_retries = counts.retried;
+        self.solver_almost_solved = counts.almost_solved;
+        self
     }
 
     #[must_use]
@@ -426,6 +449,8 @@ impl HonestDirectionalRegionDiagnostics {
             random_direction_count,
             iterations_run,
             converged,
+            solver_retries: 0,
+            solver_almost_solved: 0,
         }
     }
 }

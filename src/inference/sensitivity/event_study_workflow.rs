@@ -1,14 +1,10 @@
 use super::super::relative_magnitude::conditional_confidence_set::RelativeMagnitudePreparedFunctionalBranch;
 use super::super::relative_magnitude::least_favorable_intervals::{
     build_relative_magnitude_multi_flci_problem_with_precomputed_sets,
-    compute_relative_magnitude_multi_flci_with_config,
     compute_relative_magnitude_multi_flci_with_prepared_branches,
     compute_relative_magnitude_multi_flci_with_prepared_functional_branches,
 };
-use super::super::smoothness::least_favorable_intervals::{
-    SmoothnessFlciConfig, build_smoothness_multi_flci_problem,
-    compute_smoothness_multi_flci_with_config,
-};
+use super::super::smoothness::least_favorable_intervals::SmoothnessFlciConfig;
 use super::super::{
     HonestDirectionalFunctionalPoint, HonestDirectionalRegion, HonestDirectionalRegionDiagnostics,
     HonestFunctionalAssessmentPoint, HonestIdentifiedSet, HonestJointPathConfig,
@@ -66,7 +62,25 @@ pub fn assess_honest_event_study_workflow(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestStudyWorkflowResult, String> {
-    assess_honest_event_study_workflow_with_config(
+    assess_honest_event_study_workflow_counted(
+        input,
+        functionals,
+        sensitivity,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_workflow_counted(
+    input: &HonestEventStudyInput,
+    functionals: &[HonestPostFunctional],
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestStudyWorkflowResult, String> {
+    assess_honest_event_study_workflow_with_config_counted(
         input,
         functionals,
         sensitivity,
@@ -79,6 +93,7 @@ pub fn assess_honest_event_study_workflow(
             joint: HonestJointPathConfig::default_for_production(),
             direction_mode: HonestWorkflowDirectionMode::default_for_production(),
         },
+        counter,
     )
 }
 
@@ -95,6 +110,27 @@ pub fn assess_honest_event_study_workflow_with_config(
     inference: InferenceConfig,
     null_value: f64,
     config: &HonestWorkflowConfig,
+) -> Result<HonestStudyWorkflowResult, String> {
+    assess_honest_event_study_workflow_with_config_counted(
+        input,
+        functionals,
+        sensitivity,
+        inference,
+        null_value,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_workflow_with_config_counted(
+    input: &HonestEventStudyInput,
+    functionals: &[HonestPostFunctional],
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    config: &HonestWorkflowConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestStudyWorkflowResult, String> {
     let workflow_started = Instant::now();
     if functionals.is_empty() {
@@ -116,11 +152,13 @@ pub fn assess_honest_event_study_workflow_with_config(
             workflow_post_weights
                 .par_iter()
                 .map(|post_weights| {
-                    super::prepare_relative_magnitude_functional_branches(
-                        post_weights,
-                        &prepared.branches,
-                        &prepared.input_branches,
-                    )
+                    {
+                        super::prepare_relative_magnitude_functional_branches(
+                            post_weights,
+                            &prepared.branches,
+                            &prepared.input_branches,
+                        )
+                    }
                 })
                 .collect::<Result<Vec<_>, String>>()?,
         ),
@@ -155,6 +193,7 @@ pub fn assess_honest_event_study_workflow_with_config(
                         &prepared.branches,
                         &prepared.input_branches,
                         prepared_functional_branch,
+                        counter,
                     )?;
                 Ok(HonestFunctionalAssessmentPoint {
                     functional: functional.clone(),
@@ -166,13 +205,14 @@ pub fn assess_honest_event_study_workflow_with_config(
             .par_iter()
             .zip(workflow_post_weights.par_iter())
             .map(|(functional, post_weights)| {
-                let assessment = super::assess_honest_event_study_functional_with_config(
+                let assessment = super::assess_honest_event_study_functional_with_config_counted(
                     input,
                     post_weights,
                     sensitivity,
                     inference,
                     null_value,
                     config.relative_magnitude,
+                    counter,
                 )?;
                 Ok(HonestFunctionalAssessmentPoint {
                     functional: functional.clone(),
@@ -198,7 +238,7 @@ pub fn assess_honest_event_study_workflow_with_config(
             null_value,
             config.relative_magnitude,
             config.joint,
-            prepared_relative_magnitude.as_ref(),
+            prepared_relative_magnitude.as_ref(), counter,
         )?;
     emit_workflow_timing(
         "joint_path_region",
@@ -220,6 +260,7 @@ pub fn assess_honest_event_study_workflow_with_config(
             null_value,
             config,
             prepared_relative_magnitude.as_ref(),
+            counter,
         )?,
     };
     emit_workflow_timing(
@@ -239,6 +280,7 @@ pub fn assess_honest_event_study_workflow_with_config(
         config,
         prepared_relative_magnitude.as_ref(),
         prepared_functional_branch_sets.as_deref(),
+        counter,
     )?;
     emit_workflow_timing(
         "multi_flci",
@@ -300,6 +342,7 @@ fn build_workflow_directional_region(
     null_value: f64,
     config: &HonestWorkflowConfig,
     prepared_relative_magnitude: Option<&super::PreparedRelativeMagnitudeBaseContext>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestDirectionalRegion, String> {
     match &config.direction_mode {
         HonestWorkflowDirectionMode::Basis => {
@@ -316,7 +359,7 @@ fn build_workflow_directional_region(
                 null_value,
                 config.relative_magnitude,
                 config.joint,
-                prepared_relative_magnitude,
+                prepared_relative_magnitude, counter,
             )
         }
         HonestWorkflowDirectionMode::Custom(directions) => {
@@ -328,22 +371,22 @@ fn build_workflow_directional_region(
                 null_value,
                 config.relative_magnitude,
                 config.joint,
-                prepared_relative_magnitude,
+                prepared_relative_magnitude, counter,
             )
         }
         HonestWorkflowDirectionMode::OptimizationSurface(surface) => {
-            super::regions::assess_honest_event_study_optimization_surface_region_with_config(
+            super::regions::assess_honest_event_study_optimization_surface_region_with_config_counted(
                 input,
                 sensitivity,
                 inference,
                 null_value,
                 config.relative_magnitude,
                 config.joint,
-                *surface,
+                *surface, counter,
             )
         }
         HonestWorkflowDirectionMode::OptimizationSurfaceAdaptive { surface, adaptive } => {
-            super::regions::assess_honest_event_study_optimization_surface_region_adaptive_with_config(
+            super::regions::assess_honest_event_study_optimization_surface_region_adaptive_with_config_counted(
                 input,
                 sensitivity,
                 inference,
@@ -353,7 +396,7 @@ fn build_workflow_directional_region(
                     joint: config.joint,
                     surface: *surface,
                     adaptive: *adaptive,
-                },
+                }, counter,
             )
         }
     }
@@ -369,6 +412,7 @@ fn build_workflow_multi_function_intervals(
     config: &HonestWorkflowConfig,
     prepared_relative_magnitude: Option<&super::PreparedRelativeMagnitudeBaseContext>,
     prepared_functional_branch_sets: Option<&[Vec<RelativeMagnitudePreparedFunctionalBranch>]>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Option<HonestMultiFlciResult>, String> {
     match sensitivity {
         HonestSensitivity::RelativeMagnitude(mbar) => {
@@ -404,7 +448,7 @@ fn build_workflow_multi_function_intervals(
                             config.joint,
                             &prepared.branches,
                             &prepared.input_branches,
-                            prepared_functional_branches,
+                            prepared_functional_branches, counter,
                         )?
                     }
                     None => compute_relative_magnitude_multi_flci_with_prepared_branches(
@@ -412,24 +456,24 @@ fn build_workflow_multi_function_intervals(
                         config.relative_magnitude,
                         config.joint,
                         &prepared.branches,
-                        &prepared.input_branches,
+                        &prepared.input_branches, counter,
                     )?,
                 },
-                None => compute_relative_magnitude_multi_flci_with_config(
+                None => crate::inference::sensitivity::relative_magnitude::least_favorable_intervals::compute_relative_magnitude_multi_flci_with_config_counted(
                     &problem,
                     config.relative_magnitude,
-                    config.joint,
+                    config.joint, counter,
                 )?,
             };
             Ok(Some(result))
         }
         HonestSensitivity::Smoothness(m) => {
             let problem =
-                build_smoothness_multi_flci_problem(input, post_weight_sets, m, inference)?;
-            let result = compute_smoothness_multi_flci_with_config(
+                crate::inference::sensitivity::smoothness::least_favorable_intervals::build_smoothness_multi_flci_problem_counted(input, post_weight_sets, m, inference, counter)?;
+            let result = crate::inference::sensitivity::smoothness::least_favorable_intervals::compute_smoothness_multi_flci_with_config_counted(
                 &problem,
                 SmoothnessFlciConfig::default_for_production(),
-                config.joint,
+                config.joint, counter,
             )?;
             Ok(Some(result))
         }

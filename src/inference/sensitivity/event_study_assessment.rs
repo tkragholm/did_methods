@@ -26,14 +26,6 @@ use super::{
     relative_magnitude::{
         compute_original_confidence_set,
         compute_relative_magnitude_confidence_set_with_precomputed_sets,
-        least_favorable_intervals::{
-            build_relative_magnitude_flci_problem, build_relative_magnitude_multi_flci_problem,
-            compute_relative_magnitude_flci_with_config,
-            compute_relative_magnitude_multi_flci_with_config,
-        },
-    },
-    smoothness::{
-        compute_smoothness_confidence_set_with_config, compute_smoothness_identified_set,
     },
 };
 use crate::inference::z_score_for_confidence;
@@ -149,13 +141,33 @@ pub fn compute_honest_event_study_scalar(
     sensitivity: HonestSensitivity,
     inference: InferenceConfig,
 ) -> Result<Vec<HonestEventStudyPoint>, String> {
+    compute_honest_event_study_scalar_counted(
+        betahat,
+        covariance,
+        pre_periods,
+        post_periods,
+        sensitivity,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_honest_event_study_scalar_counted(
+    betahat: &[f64],
+    covariance: &[Vec<f64>],
+    pre_periods: &[i32],
+    post_periods: &[i32],
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<Vec<HonestEventStudyPoint>, String> {
     let input = HonestEventStudyInput {
         betahat: betahat.to_vec(),
         covariance: covariance.to_vec(),
         pre_periods: pre_periods.to_vec(),
         post_periods: post_periods.to_vec(),
     };
-    compute_honest_event_study_scalar_for_input(&input, sensitivity, inference)
+    compute_honest_event_study_scalar_for_input_counted(&input, sensitivity, inference, counter)
 }
 
 /// Compute scalar `HonestDiD` results for each post-treatment coefficient in a
@@ -167,6 +179,20 @@ pub fn compute_honest_event_study_scalar_for_input(
     input: &HonestEventStudyInput,
     sensitivity: HonestSensitivity,
     inference: InferenceConfig,
+) -> Result<Vec<HonestEventStudyPoint>, String> {
+    compute_honest_event_study_scalar_for_input_counted(
+        input,
+        sensitivity,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_honest_event_study_scalar_for_input_counted(
+    input: &HonestEventStudyInput,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Vec<HonestEventStudyPoint>, String> {
     input.validate()?;
 
@@ -198,7 +224,7 @@ pub fn compute_honest_event_study_scalar_for_input(
                         inference,
                     )?;
                     let identified = compute_relative_magnitude_identified_set_for_basis_period(
-                        input, post_idx, prepared,
+                        input, post_idx, prepared, counter,
                     )?;
                     let prepared_input = prepared_input_branches
                         .as_ref()
@@ -210,7 +236,7 @@ pub fn compute_honest_event_study_scalar_for_input(
                             inference,
                             RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
                             prepared,
-                            prepared_input,
+                            prepared_input, counter,
                         )?;
                     HonestResult {
                         original_estimate: original.estimate,
@@ -224,13 +250,13 @@ pub fn compute_honest_event_study_scalar_for_input(
                     let post_weights = basis_post_weights(input.num_post_periods(), post_idx);
                     let original =
                         compute_original_confidence_set(input, &post_weights, inference)?;
-                    let identified = compute_smoothness_identified_set(input, &post_weights, m)?;
-                    let conditional = compute_smoothness_confidence_set_with_config(
+                    let identified = crate::inference::sensitivity::smoothness::compute_smoothness_identified_set_counted(input, &post_weights, m, counter)?;
+                    let conditional = crate::inference::sensitivity::smoothness::compute_smoothness_confidence_set_with_config_counted(
                         input,
                         &post_weights,
                         m,
                         inference,
-                        SmoothnessConfidenceSetConfig::from_inference(inference),
+                        SmoothnessConfidenceSetConfig::from_inference(inference), counter,
                     )?;
                     HonestResult {
                         original_estimate: original.estimate,
@@ -276,13 +302,32 @@ pub fn assess_honest_event_study_functional(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestAssessment, String> {
-    assess_honest_event_study_functional_with_config(
+    assess_honest_event_study_functional_counted(
+        input,
+        post_weights,
+        sensitivity,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_functional_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestAssessment, String> {
+    assess_honest_event_study_functional_with_config_counted(
         input,
         post_weights,
         sensitivity,
         inference,
         null_value,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -314,14 +359,37 @@ pub fn assess_honest_event_study_functional_with_config(
     null_value: f64,
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestAssessment, String> {
+    assess_honest_event_study_functional_with_config_counted(
+        input,
+        post_weights,
+        sensitivity,
+        inference,
+        null_value,
+        relative_magnitude_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_functional_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestAssessment, String> {
     let original = compute_original_confidence_set(input, post_weights, inference)?;
     let (robust_ci, identified_set, sensitivity_value) = match sensitivity {
         HonestSensitivity::RelativeMagnitude(mbar) => {
-            let identified = super::relative_magnitude::compute_relative_magnitude_identified_set(
-                input,
-                post_weights,
-                mbar,
-            )?;
+            let identified =
+                super::relative_magnitude::compute_relative_magnitude_identified_set_counted(
+                    input,
+                    post_weights,
+                    mbar,
+                    counter,
+                )?;
             let conditional = compute_relative_magnitude_confidence_set_with_precomputed_sets(
                 input,
                 post_weights,
@@ -330,6 +398,7 @@ pub fn assess_honest_event_study_functional_with_config(
                 relative_magnitude_config,
                 &original,
                 &identified,
+                counter,
             )?;
             (
                 (conditional.lb, conditional.ub),
@@ -352,13 +421,13 @@ pub fn assess_honest_event_study_functional_with_config(
                 );
             }
             if pre_periods_satisfy_smoothness_bound(&input.betahat[..input.num_pre_periods()], m) {
-                let identified = compute_smoothness_identified_set(input, post_weights, m)?;
-                let conditional = compute_smoothness_confidence_set_with_config(
+                let identified = crate::inference::sensitivity::smoothness::compute_smoothness_identified_set_counted(input, post_weights, m, counter)?;
+                let conditional = crate::inference::sensitivity::smoothness::compute_smoothness_confidence_set_with_config_counted(
                     input,
                     post_weights,
                     m,
                     inference,
-                    SmoothnessConfidenceSetConfig::from_inference(inference),
+                    SmoothnessConfidenceSetConfig::from_inference(inference), counter,
                 )?;
                 let identified_ci = (identified.lb, identified.ub);
                 let robust_ci = (conditional.lb, conditional.ub);
@@ -396,6 +465,24 @@ pub fn assess_honest_event_study_period(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestAssessment, String> {
+    assess_honest_event_study_period_counted(
+        input,
+        post_period,
+        sensitivity,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_period_counted(
+    input: &HonestEventStudyInput,
+    post_period: i32,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestAssessment, String> {
     let Some(post_idx) = input
         .post_periods
         .iter()
@@ -407,7 +494,14 @@ pub fn assess_honest_event_study_period(
     };
     let mut post_weights = vec![0.0; input.num_post_periods()];
     post_weights[post_idx] = 1.0;
-    assess_honest_event_study_functional(input, &post_weights, sensitivity, inference, null_value)
+    assess_honest_event_study_functional_counted(
+        input,
+        &post_weights,
+        sensitivity,
+        inference,
+        null_value,
+        counter,
+    )
 }
 
 /// Version of [`assess_honest_event_study_period`] with explicit `DeltaRM`
@@ -424,6 +518,26 @@ pub fn assess_honest_event_study_period_with_config(
     null_value: f64,
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestAssessment, String> {
+    assess_honest_event_study_period_with_config_counted(
+        input,
+        post_period,
+        sensitivity,
+        inference,
+        null_value,
+        relative_magnitude_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_period_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_period: i32,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestAssessment, String> {
     let Some(post_idx) = input
         .post_periods
         .iter()
@@ -435,13 +549,14 @@ pub fn assess_honest_event_study_period_with_config(
     };
     let mut post_weights = vec![0.0; input.num_post_periods()];
     post_weights[post_idx] = 1.0;
-    assess_honest_event_study_functional_with_config(
+    assess_honest_event_study_functional_with_config_counted(
         input,
         &post_weights,
         sensitivity,
         inference,
         null_value,
         relative_magnitude_config,
+        counter,
     )
 }
 
@@ -533,8 +648,33 @@ pub fn assess_honest_event_study_post_functional(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestAssessment, String> {
+    assess_honest_event_study_post_functional_counted(
+        input,
+        functional,
+        sensitivity,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_post_functional_counted(
+    input: &HonestEventStudyInput,
+    functional: &HonestPostFunctional,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestAssessment, String> {
     let post_weights = post_weights_for_functional(input, functional)?;
-    assess_honest_event_study_functional(input, &post_weights, sensitivity, inference, null_value)
+    assess_honest_event_study_functional_counted(
+        input,
+        &post_weights,
+        sensitivity,
+        inference,
+        null_value,
+        counter,
+    )
 }
 
 /// Version of [`assess_honest_event_study_post_functional`] with explicit
@@ -552,14 +692,35 @@ pub fn assess_honest_event_study_post_functional_with_config(
     null_value: f64,
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestAssessment, String> {
+    assess_honest_event_study_post_functional_with_config_counted(
+        input,
+        functional,
+        sensitivity,
+        inference,
+        null_value,
+        relative_magnitude_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_post_functional_with_config_counted(
+    input: &HonestEventStudyInput,
+    functional: &HonestPostFunctional,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestAssessment, String> {
     let post_weights = post_weights_for_functional(input, functional)?;
-    assess_honest_event_study_functional_with_config(
+    assess_honest_event_study_functional_with_config_counted(
         input,
         &post_weights,
         sensitivity,
         inference,
         null_value,
         relative_magnitude_config,
+        counter,
     )
 }
 
@@ -574,6 +735,7 @@ fn assess_relative_magnitude_functional_with_prepared_functional_branches(
     prepared_branches: &[RelativeMagnitudePreparedBranch],
     prepared_input_branches: &[RelativeMagnitudePreparedInputBranch],
     prepared_functional_branches: &[RelativeMagnitudePreparedFunctionalBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestAssessment, String> {
     let original = compute_original_confidence_set(input, post_weights, inference)?;
     let branch_identified_sets =
@@ -581,6 +743,7 @@ fn assess_relative_magnitude_functional_with_prepared_functional_branches(
             input,
             post_weights,
             prepared_branches,
+            counter,
         )?;
     let identified = global_identified_set_from_branch_identified_sets(
         input,
@@ -598,7 +761,7 @@ fn assess_relative_magnitude_functional_with_prepared_functional_branches(
         prepared_branches,
         prepared_input_branches,
         prepared_functional_branches,
-        &branch_identified_sets,
+        &branch_identified_sets, counter,
     )?;
     let robust_ci = (conditional.lb, conditional.ub);
     Ok(HonestAssessment {
@@ -623,6 +786,7 @@ fn assess_relative_magnitude_basis_period_with_prepared_input(
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
     prepared_branches: &[RelativeMagnitudePreparedBranch],
     prepared_input_branches: &[RelativeMagnitudePreparedInputBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestAssessment, String> {
     let post_weights = basis_post_weights(input.num_post_periods(), post_idx);
     let prepared_functional_branches = prepare_relative_magnitude_functional_branches(
@@ -640,6 +804,7 @@ fn assess_relative_magnitude_basis_period_with_prepared_input(
         prepared_branches,
         prepared_input_branches,
         &prepared_functional_branches,
+        counter,
     )
 }
 
@@ -654,6 +819,7 @@ pub(in crate::inference::sensitivity) fn assess_relative_magnitude_basis_period_
     prepared_branches: &[RelativeMagnitudePreparedBranch],
     prepared_input_branches: &[RelativeMagnitudePreparedInputBranch],
     prepared_functional_branches: &[RelativeMagnitudePreparedFunctionalBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestAssessment, String> {
     let original = compute_original_confidence_set(input, post_weights, inference)?;
     let branch_identified_sets =
@@ -661,6 +827,7 @@ pub(in crate::inference::sensitivity) fn assess_relative_magnitude_basis_period_
             input,
             post_weights,
             prepared_branches,
+            counter,
         )?;
     let identified = global_identified_set_from_branch_identified_sets(
         input,
@@ -678,7 +845,7 @@ pub(in crate::inference::sensitivity) fn assess_relative_magnitude_basis_period_
         prepared_branches,
         prepared_input_branches,
         prepared_functional_branches,
-        &branch_identified_sets,
+        &branch_identified_sets, counter,
     )?;
     let robust_ci = (conditional.lb, conditional.ub);
     Ok(HonestAssessment {
@@ -734,13 +901,32 @@ pub fn assess_honest_event_study_post_functional_flci(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestAssessment, String> {
-    assess_honest_event_study_post_functional_flci_with_config(
+    assess_honest_event_study_post_functional_flci_counted(
+        input,
+        functional,
+        mbar,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_post_functional_flci_counted(
+    input: &HonestEventStudyInput,
+    functional: &HonestPostFunctional,
+    mbar: f64,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestAssessment, String> {
+    assess_honest_event_study_post_functional_flci_with_config_counted(
         input,
         functional,
         mbar,
         inference,
         null_value,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -758,9 +944,29 @@ pub fn assess_honest_event_study_post_functional_flci_with_config(
     null_value: f64,
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestAssessment, String> {
+    assess_honest_event_study_post_functional_flci_with_config_counted(
+        input,
+        functional,
+        mbar,
+        inference,
+        null_value,
+        relative_magnitude_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_post_functional_flci_with_config_counted(
+    input: &HonestEventStudyInput,
+    functional: &HonestPostFunctional,
+    mbar: f64,
+    inference: InferenceConfig,
+    null_value: f64,
+    relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestAssessment, String> {
     let post_weights = post_weights_for_functional(input, functional)?;
-    let problem = build_relative_magnitude_flci_problem(input, &post_weights, mbar, inference)?;
-    let flci = compute_relative_magnitude_flci_with_config(&problem, relative_magnitude_config)?;
+    let problem = crate::inference::sensitivity::relative_magnitude::least_favorable_intervals::build_relative_magnitude_flci_problem_counted(input, &post_weights, mbar, inference, counter)?;
+    let flci = crate::inference::sensitivity::relative_magnitude::least_favorable_intervals::compute_relative_magnitude_flci_with_config_counted(&problem, relative_magnitude_config, counter)?;
     Ok(HonestAssessment {
         original_ci: flci.original_ci,
         robust_ci: flci.flci,
@@ -785,13 +991,30 @@ pub fn assess_honest_event_study_post_functional_multi_flci(
     mbar: f64,
     inference: InferenceConfig,
 ) -> Result<HonestMultiFlciResult, String> {
-    assess_honest_event_study_post_functional_multi_flci_with_config(
+    assess_honest_event_study_post_functional_multi_flci_counted(
+        input,
+        functionals,
+        mbar,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_post_functional_multi_flci_counted(
+    input: &HonestEventStudyInput,
+    functionals: &[HonestPostFunctional],
+    mbar: f64,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestMultiFlciResult, String> {
+    assess_honest_event_study_post_functional_multi_flci_with_config_counted(
         input,
         functionals,
         mbar,
         inference,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
         HonestJointPathConfig::default_for_production(),
+        counter,
     )
 }
 
@@ -809,6 +1032,26 @@ pub fn assess_honest_event_study_post_functional_multi_flci_with_config(
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
     joint_config: HonestJointPathConfig,
 ) -> Result<HonestMultiFlciResult, String> {
+    assess_honest_event_study_post_functional_multi_flci_with_config_counted(
+        input,
+        functionals,
+        mbar,
+        inference,
+        relative_magnitude_config,
+        joint_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_post_functional_multi_flci_with_config_counted(
+    input: &HonestEventStudyInput,
+    functionals: &[HonestPostFunctional],
+    mbar: f64,
+    inference: InferenceConfig,
+    relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
+    joint_config: HonestJointPathConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestMultiFlciResult, String> {
     if functionals.is_empty() {
         return Err("multi-functional FLCI requires at least one functional".to_string());
     }
@@ -817,10 +1060,10 @@ pub fn assess_honest_event_study_post_functional_multi_flci_with_config(
         .map(|functional| post_weights_for_functional(input, functional))
         .collect::<Result<Vec<_>, String>>()?;
     let problem =
-        build_relative_magnitude_multi_flci_problem(input, &post_weight_sets, mbar, inference)?;
-    compute_relative_magnitude_multi_flci_with_config(
+        crate::inference::sensitivity::relative_magnitude::least_favorable_intervals::build_relative_magnitude_multi_flci_problem_counted(input, &post_weight_sets, mbar, inference, counter)?;
+    crate::inference::sensitivity::relative_magnitude::least_favorable_intervals::compute_relative_magnitude_multi_flci_with_config_counted(
         &problem,
         relative_magnitude_config,
-        joint_config,
+        joint_config, counter,
     )
 }

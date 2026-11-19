@@ -59,6 +59,7 @@ mod linear_algebra;
 mod relative_magnitude;
 mod report_exports;
 mod smoothness;
+mod solver_tally;
 mod summary_api;
 
 pub use api_types::*;
@@ -138,6 +139,8 @@ pub use smoothness::{
     compute_smoothness_identified_set, max_adjacent_pre_period_change,
     pre_periods_satisfy_smoothness_bound,
 };
+pub(crate) use solver_tally::SolverCounter;
+pub use solver_tally::SolverCounts;
 pub use summary_api::{
     PostPeriodSensitivitySummary, SensitivityRestrictionKind, SensitivitySummary,
     SensitivitySummaryMethod, SensitivitySummaryRow,

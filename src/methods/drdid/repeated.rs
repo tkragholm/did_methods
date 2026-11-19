@@ -375,11 +375,13 @@ fn fit_control_outcome_by_period(
         .collect::<Vec<_>>();
 
     let model = LinearOutcome { ridge };
-    let control_coefficients = model.fit(
-        control_design.as_ref(),
-        control_outcome.as_ref(),
-        Some(&control_weights),
-    );
+    let control_coefficients = model
+        .fit(
+            control_design.as_ref(),
+            control_outcome.as_ref(),
+            Some(&control_weights),
+        )
+        .map_err(|_| DrDidError::SingularSystem)?;
     Ok(model.predict(design_matrix.as_ref(), control_coefficients.as_ref()))
 }
 

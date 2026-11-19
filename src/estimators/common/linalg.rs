@@ -14,12 +14,24 @@ use faer::{Conj, Mat, MatRef, Par, Spec};
 ///
 /// # Notes
 /// - `lambda` is applied uniformly to every diagonal entry.
-#[must_use]
-pub fn ridge_solve_lu(mut a: Mat<f64>, b: &Mat<f64>, lambda: f64) -> Mat<f64> {
+///
+/// # Errors
+/// Returns an error if the solution contains a non-finite value.
+pub fn ridge_solve_lu(
+    mut a: Mat<f64>,
+    b: &Mat<f64>,
+    lambda: f64,
+) -> Result<Mat<f64>, &'static str> {
     for i in 0..a.ncols() {
         *a.get_mut(i, i) += lambda;
     }
-    a.partial_piv_lu().solve(b)
+    let solution = a.partial_piv_lu().solve(b);
+    if (0..solution.nrows()).all(|r| (0..solution.ncols()).all(|c| solution.get(r, c).is_finite()))
+    {
+        Ok(solution)
+    } else {
+        Err(NON_FINITE)
+    }
 }
 
 /// Solve a dense linear system `A x = b` using Cholesky when possible.

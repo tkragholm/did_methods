@@ -92,11 +92,13 @@ fn weighted_regression(
     let subset_weights = subset.iter().map(|row| weights[*row]).collect::<Vec<f64>>();
 
     let model = LinearOutcome { ridge };
-    let coefficients = model.fit(
-        subset_design.as_ref(),
-        subset_outcome.as_ref(),
-        Some(&subset_weights),
-    );
+    let coefficients = model
+        .fit(
+            subset_design.as_ref(),
+            subset_outcome.as_ref(),
+            Some(&subset_weights),
+        )
+        .map_err(|_| DrDidError::SingularSystem)?;
     let predictions = model.predict(design.as_ref(), coefficients.as_ref());
 
     // X' diag(w) X / n, over the full sample because w is zero outside the subset.

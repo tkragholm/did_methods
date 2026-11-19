@@ -224,6 +224,7 @@ impl<'a> DualMaxLpWorkspace<'a> {
         sigma_gamma: &[f64],
         sigma_b2: f64,
         c: f64,
+        counter: &crate::inference::sensitivity::SolverCounter,
     ) -> Result<f64, String> {
         if sigma_b2.abs() < f64::EPSILON {
             return Err("HonestDiD dual max program encountered zero gamma variance".to_string());
@@ -292,13 +293,16 @@ impl<'a> DualMaxLpWorkspace<'a> {
             }
             Err(LpError::Infeasible) => Err("HonestDiD dual max program is infeasible".to_string()),
             Err(LpError::Unbounded) => Err("HonestDiD dual max program is unbounded".to_string()),
-            Err(status) => solve_dual_max_with_clarabel_fallback(self.w_t, &self.f_scratch)
-                .map_err(|fallback_err| {
-                    format!(
-                        "dense simplex failed to solve HonestDiD dual max LP: {status}; \
+            Err(status) => {
+                solve_dual_max_with_clarabel_fallback(self.w_t, &self.f_scratch, counter).map_err(
+                    |fallback_err| {
+                        format!(
+                            "dense simplex failed to solve HonestDiD dual max LP: {status}; \
                          Clarabel fallback also failed: {fallback_err}"
-                    )
-                }),
+                        )
+                    },
+                )
+            }
         }
     }
 }
@@ -515,7 +519,13 @@ mod tests {
                 .collect::<Vec<_>>();
             let reference = solve_dual_max_with_clarabel(&w_t, &f);
             let observed = workspace
-                .solve_for_c(&s_t, &sigma_gamma, sigma_b2, c)
+                .solve_for_c(
+                    &s_t,
+                    &sigma_gamma,
+                    sigma_b2,
+                    c,
+                    &crate::inference::sensitivity::SolverCounter::new(),
+                )
                 .unwrap();
             assert!(
                 (observed - reference).abs() < 1e-8,
@@ -530,7 +540,13 @@ mod tests {
         let w_t = vec![vec![-1.0, 0.0], vec![-0.5, 1.0]];
         let mut workspace = DualMaxLpWorkspace::new(&w_t).unwrap();
         let error = workspace
-            .solve_for_c(&[0.1, 0.2], &[0.3, 0.1], 1.0, 0.5)
+            .solve_for_c(
+                &[0.1, 0.2],
+                &[0.3, 0.1],
+                1.0,
+                0.5,
+                &crate::inference::sensitivity::SolverCounter::new(),
+            )
             .unwrap_err();
         assert!(error.contains("infeasible"), "{error}");
     }

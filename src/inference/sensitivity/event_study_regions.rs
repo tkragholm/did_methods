@@ -21,3 +21,8 @@ pub use optimization_surface::{
     assess_honest_event_study_optimization_surface_region_adaptive_with_config,
     assess_honest_event_study_optimization_surface_region_with_config,
 };
+
+pub(in crate::inference::sensitivity) use optimization_surface::{
+    assess_honest_event_study_optimization_surface_region_adaptive_with_config_counted,
+    assess_honest_event_study_optimization_surface_region_with_config_counted,
+};

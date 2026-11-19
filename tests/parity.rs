@@ -2,8 +2,8 @@
 
 use did_methods::{
     AttGtConfig, AttGtObservation, ContinuousObservation, DidCcConfig, DrDidConfig,
-    DrDidObservation, DrDidRepeatedObservation, HonestEventStudyInput, HonestJointPathConfig,
-    HonestJointPathMethod, HonestOptimizationSurfaceAdaptiveConfig,
+    DrDidObservation, DrDidRepeatedObservation, HonestAssessment, HonestEventStudyInput,
+    HonestJointPathConfig, HonestJointPathMethod, HonestOptimizationSurfaceAdaptiveConfig,
     HonestOptimizationSurfaceAdaptiveRunConfig, HonestOptimizationSurfaceConfig,
     HonestPostFunctional, HonestSensitivity, InferenceConfig, PolynomialBasis,
     RelativeMagnitudeConfidenceSetConfig, TripleDidObservation,
@@ -1644,11 +1644,76 @@ fn honest_post_functional_multi_flci_wrapper_matches_direct_problem_path() {
 /// come from `HonestDiD`, which calibrates its first stage there, and this
 /// crate was asking for a different quantile of the least-favorable
 /// distribution than the package it is being compared against.
-/// The fixture's least-favorable critical value comes from R's own 1,000
-/// draws. Its error against a 200,000-draw estimate is 2.6e-3 at the worst
-/// point, so the comparison allows about twice that.
-const HONEST_REGION_TOLERANCE: f64 = 5e-3;
+/// Both sides of the region comparisons estimate the least-favorable critical
+/// value by simulation with this many draws, so each bound carries a Monte
+/// Carlo error. The test measures ours from the spread over seeds and treats
+/// R's as equal, since its fixture is made with the same number of draws.
+const HONEST_REGION_TOLERANCE_SES: f64 = 4.0;
 const HONEST_REGION_DRAWS: usize = 200_000;
+/// Seeds of the repeated runs that estimate the Monte Carlo error of a bound.
+const HONEST_REGION_SEEDS: [u64; 4] = [1, 2, 3, 4];
+
+/// Compares the bounds of a region with an R fixture made with the same number
+/// of draws. `fixture` holds `[lb, ub]` per point.
+///
+/// `run(seed)` returns the assessments from our simulation seeded with `seed`.
+/// The comparison uses seed 0, the default. The standard error of a bound is
+/// the sample standard deviation over seed 0 and `HONEST_REGION_SEEDS`, and R's
+/// is taken as equal to it, so the combined standard error is `sqrt(2)` times
+/// that. Each endpoint is also read off a grid on both sides, which moves it by
+/// up to one grid step: ours spans the identified set and the estimate plus 20
+/// standard errors on either side in 1,000 points, R's spans 80 standard errors
+/// in 10,000. A bound must lie within `HONEST_REGION_TOLERANCE_SES` combined
+/// standard errors plus the two steps.
+fn assert_region_within_monte_carlo_error(
+    fixture: &[[f64; 2]],
+    run: impl Fn(u64) -> Vec<HonestAssessment>,
+) {
+    let default_run = run(0);
+    assert_eq!(default_run.len(), fixture.len());
+    let runs: Vec<Vec<HonestAssessment>> = std::iter::once(default_run.clone())
+        .chain(HONEST_REGION_SEEDS.iter().map(|seed| run(*seed)))
+        .collect();
+    let count = runs.len() as f64;
+    let mut worst_deviation = 0.0_f64;
+    let mut worst_in_ses = 0.0_f64;
+    for (point, reference) in fixture.iter().enumerate() {
+        let assessment = &default_run[point];
+        let step_ours = (assessment.identified_set.1.max(assessment.estimate)
+            - assessment.identified_set.0.min(assessment.estimate)
+            + 40.0 * assessment.se)
+            / 999.0;
+        let step_r = 80.0 * assessment.se / 9_999.0;
+        for (side, expected) in reference.iter().enumerate() {
+            let pick = |a: &HonestAssessment| {
+                if side == 0 {
+                    a.robust_ci.0
+                } else {
+                    a.robust_ci.1
+                }
+            };
+            let values: Vec<f64> = runs.iter().map(|r| pick(&r[point])).collect();
+            let mean = values.iter().sum::<f64>() / count;
+            let se =
+                (values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (count - 1.0)).sqrt();
+            let combined_se = 2.0_f64.sqrt() * se;
+            let deviation = (values[0] - expected).abs();
+            let allowed = HONEST_REGION_TOLERANCE_SES * combined_se + step_ours + step_r;
+            assert!(
+                deviation <= allowed,
+                "point {point} side {side}: deviation {deviation:.3e} exceeds {HONEST_REGION_TOLERANCE_SES} combined standard errors ({combined_se:.3e}) plus grid steps {:.3e}",
+                step_ours + step_r
+            );
+            worst_deviation = worst_deviation.max(deviation);
+            if combined_se > 0.0 {
+                worst_in_ses = worst_in_ses.max(deviation / combined_se);
+            }
+        }
+    }
+    println!(
+        "worst deviation from R: {worst_deviation:.3e}, largest deviation of a bound that depends on the seed: {worst_in_ses:.2} combined standard errors"
+    );
+}
 
 #[test]
 fn honest_joint_path_region_bonferroni_matches_r_fixture() {
@@ -1672,36 +1737,43 @@ fn honest_joint_path_region_bonferroni_matches_r_fixture() {
 
     assert_eq!(fixture.post_weight_sets.len(), input.num_post_periods());
     let inference = InferenceConfig::new(1.0 - fixture.meta.alpha_joint);
-    let rust = assess_honest_event_study_joint_path_region_with_config(
-        &input,
-        HonestSensitivity::RelativeMagnitude(fixture.meta.mbar),
-        inference,
-        0.0,
-        RelativeMagnitudeConfidenceSetConfig {
-            least_favorable_draws: HONEST_REGION_DRAWS,
-            ..RelativeMagnitudeConfidenceSetConfig::from_inference(inference)
-        },
-        HonestJointPathConfig {
-            method: HonestJointPathMethod::Bonferroni,
-            simulation_draws: 1_000,
-            simulation_seed: 123,
-        },
-    )
-    .expect("joint path region");
-
-    assert!(
-        (rust.pointwise_confidence_level - fixture.meta.pointwise_confidence_level).abs() < 1e-12
-    );
-    assert_eq!(rust.points.len(), fixture.points.len());
-    let mut worst = 0.0_f64;
-    for (rust_point, fixture_point) in rust.points.iter().zip(fixture.points.iter()) {
-        assert_eq!(rust_point.post_period, fixture_point.post_period);
-        worst = worst
-            .max((rust_point.assessment.robust_ci.0 - fixture_point.lb).abs())
-            .max((rust_point.assessment.robust_ci.1 - fixture_point.ub).abs());
-    }
-    println!("worst deviation from R: {worst:.3e}");
-    assert!(worst < HONEST_REGION_TOLERANCE);
+    let run = |seed: u64| {
+        let rust = assess_honest_event_study_joint_path_region_with_config(
+            &input,
+            HonestSensitivity::RelativeMagnitude(fixture.meta.mbar),
+            inference,
+            0.0,
+            RelativeMagnitudeConfidenceSetConfig {
+                least_favorable_draws: HONEST_REGION_DRAWS,
+                least_favorable_seed: seed,
+                ..RelativeMagnitudeConfidenceSetConfig::from_inference(inference)
+            },
+            HonestJointPathConfig {
+                method: HonestJointPathMethod::Bonferroni,
+                simulation_draws: 1_000,
+                simulation_seed: 123,
+            },
+        )
+        .expect("joint path region");
+        assert!(
+            (rust.pointwise_confidence_level - fixture.meta.pointwise_confidence_level).abs()
+                < 1e-12
+        );
+        assert_eq!(rust.points.len(), fixture.points.len());
+        for (rust_point, fixture_point) in rust.points.iter().zip(fixture.points.iter()) {
+            assert_eq!(rust_point.post_period, fixture_point.post_period);
+        }
+        rust.points
+            .into_iter()
+            .map(|point| point.assessment)
+            .collect()
+    };
+    let reference: Vec<[f64; 2]> = fixture
+        .points
+        .iter()
+        .map(|point| [point.lb, point.ub])
+        .collect();
+    assert_region_within_monte_carlo_error(&reference, run);
 }
 
 #[test]
@@ -1730,42 +1802,44 @@ fn honest_directional_region_bonferroni_matches_r_fixture() {
         .map(|entry| entry.post_weights.clone())
         .collect::<Vec<_>>();
     let inference = InferenceConfig::new(1.0 - fixture.meta.alpha_joint);
-    let rust = assess_honest_event_study_directional_region_with_config(
-        &input,
-        &directions,
-        HonestSensitivity::RelativeMagnitude(fixture.meta.mbar),
-        inference,
-        0.0,
-        RelativeMagnitudeConfidenceSetConfig {
-            least_favorable_draws: HONEST_REGION_DRAWS,
-            ..RelativeMagnitudeConfidenceSetConfig::from_inference(inference)
-        },
-        HonestJointPathConfig {
-            method: HonestJointPathMethod::Bonferroni,
-            simulation_draws: 1_000,
-            simulation_seed: 123,
-        },
-    )
-    .expect("directional region");
-
-    assert!(
-        (rust.pointwise_confidence_level - fixture.meta.pointwise_confidence_level).abs() < 1e-12
-    );
-    assert_eq!(rust.points.len(), fixture.points.len());
-    let mut worst = 0.0_f64;
-    for ((rust_point, fixture_point), fixture_direction) in rust
+    let run = |seed: u64| {
+        let rust = assess_honest_event_study_directional_region_with_config(
+            &input,
+            &directions,
+            HonestSensitivity::RelativeMagnitude(fixture.meta.mbar),
+            inference,
+            0.0,
+            RelativeMagnitudeConfidenceSetConfig {
+                least_favorable_draws: HONEST_REGION_DRAWS,
+                least_favorable_seed: seed,
+                ..RelativeMagnitudeConfidenceSetConfig::from_inference(inference)
+            },
+            HonestJointPathConfig {
+                method: HonestJointPathMethod::Bonferroni,
+                simulation_draws: 1_000,
+                simulation_seed: 123,
+            },
+        )
+        .expect("directional region");
+        assert!(
+            (rust.pointwise_confidence_level - fixture.meta.pointwise_confidence_level).abs()
+                < 1e-12
+        );
+        assert_eq!(rust.points.len(), fixture.points.len());
+        rust.points
+            .into_iter()
+            .map(|point| point.assessment)
+            .collect()
+    };
+    for (point, direction) in fixture.points.iter().zip(fixture.directions.iter()) {
+        assert_eq!(point.name, direction.name);
+    }
+    let reference: Vec<[f64; 2]> = fixture
         .points
         .iter()
-        .zip(fixture.points.iter())
-        .zip(fixture.directions.iter())
-    {
-        assert_eq!(fixture_point.name, fixture_direction.name);
-        worst = worst
-            .max((rust_point.assessment.robust_ci.0 - fixture_point.lb).abs())
-            .max((rust_point.assessment.robust_ci.1 - fixture_point.ub).abs());
-    }
-    println!("worst deviation from R: {worst:.3e}");
-    assert!(worst < HONEST_REGION_TOLERANCE);
+        .map(|point| [point.lb, point.ub])
+        .collect();
+    assert_region_within_monte_carlo_error(&reference, run);
 }
 
 #[test]

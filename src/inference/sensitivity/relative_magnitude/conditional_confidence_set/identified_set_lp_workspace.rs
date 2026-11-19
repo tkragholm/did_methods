@@ -99,7 +99,11 @@ impl RelativeMagnitudeIdentifiedSetWorkspace {
         })
     }
 
-    pub(super) fn solve_with_q(&mut self, q: &[f64]) -> Result<Option<f64>, String> {
+    pub(super) fn solve_with_q(
+        &mut self,
+        q: &[f64],
+        counter: &crate::inference::sensitivity::SolverCounter,
+    ) -> Result<Option<f64>, String> {
         self.current_q.clear();
         self.current_q.extend_from_slice(q);
         self.solver
@@ -107,10 +111,12 @@ impl RelativeMagnitudeIdentifiedSetWorkspace {
             .map_err(|err| format!("failed to update relative-magnitude LP objective: {err}"))?;
         self.solver.solve();
         let status = self.solver.solution.status;
+        counter.note_status(status);
         if matches!(
             status,
             SolverStatus::NumericalError | SolverStatus::InsufficientProgress
         ) {
+            counter.note_retry();
             // A fresh solver on the same problem, under `retry_settings`. The
             // workspace keeps it, so a branch that needed the retry once solves
             // its second objective the same way.
@@ -124,6 +130,7 @@ impl RelativeMagnitudeIdentifiedSetWorkspace {
             )
             .map_err(|err| format!("failed to initialize Clarabel retry solver: {err}"))?;
             self.solver.solve();
+            counter.note_status(self.solver.solution.status);
         }
         match self.solver.solution.status {
             SolverStatus::Solved | SolverStatus::AlmostSolved => Ok(Some(

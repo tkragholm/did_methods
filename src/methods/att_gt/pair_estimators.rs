@@ -543,7 +543,7 @@ pub fn estimate_pair_or(
         &control_pre_idx,
         &control_post_idx,
         drdid_cfg.ridge,
-    );
+    )?;
 
     let sample_weights = rows.iter().map(|row| row.weight).collect::<Vec<_>>();
     let normalized_weights = normalize_weights_to_n(&sample_weights).map_err(|_| ())?;
@@ -611,30 +611,34 @@ fn fit_or_nuisance_predictions(
     control_pre_idx: &[usize],
     control_post_idx: &[usize],
     ridge: f64,
-) -> OrNuisancePredictions {
+) -> Result<OrNuisancePredictions, ()> {
     let (control_pre_design, control_pre_outcome, control_pre_weights) =
         design_outcome_weights_subset(rows, design_matrix, outcomes, control_pre_idx);
     let (control_post_design, control_post_outcome, control_post_weights) =
         design_outcome_weights_subset(rows, design_matrix, outcomes, control_post_idx);
 
     let model = LinearOutcome { ridge };
-    let control_pre_coefficients = model.fit(
-        control_pre_design.as_ref(),
-        control_pre_outcome.as_ref(),
-        Some(&control_pre_weights),
-    );
-    let control_post_coefficients = model.fit(
-        control_post_design.as_ref(),
-        control_post_outcome.as_ref(),
-        Some(&control_post_weights),
-    );
+    let control_pre_coefficients = model
+        .fit(
+            control_pre_design.as_ref(),
+            control_pre_outcome.as_ref(),
+            Some(&control_pre_weights),
+        )
+        .map_err(|_| ())?;
+    let control_post_coefficients = model
+        .fit(
+            control_post_design.as_ref(),
+            control_post_outcome.as_ref(),
+            Some(&control_post_weights),
+        )
+        .map_err(|_| ())?;
 
-    OrNuisancePredictions {
+    Ok(OrNuisancePredictions {
         predicted_pre_outcomes: model
             .predict(design_matrix.as_ref(), control_pre_coefficients.as_ref()),
         predicted_post_outcomes: model
             .predict(design_matrix.as_ref(), control_post_coefficients.as_ref()),
-    }
+    })
 }
 
 fn design_outcome_weights_subset(

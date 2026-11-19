@@ -1315,6 +1315,7 @@ fn relative_magnitude_prepared_functional_branches_match_direct_conditional_conf
         &prepared_branches,
         &prepared_input_branches,
         &prepared_functional_branches,
+        &crate::inference::sensitivity::SolverCounter::new(),
     )
     .expect("cached conditional confidence set");
 
@@ -1364,6 +1365,7 @@ fn relative_magnitude_adaptive_grid_matches_full_grid_interval() {
         &prepared_branches,
         &prepared_input_branches,
         &prepared_functional_branches,
+        &crate::inference::sensitivity::SolverCounter::new(),
     )
     .expect("adaptive conditional confidence set");
     let full_grid =
@@ -1425,6 +1427,7 @@ fn most_relative_magnitude_branches_are_infeasible_at_the_observed_pre_trend() {
         &input,
         &post_weights,
         &branches,
+        &crate::inference::sensitivity::SolverCounter::new(),
     )
     .expect("branch identified sets");
 
@@ -1676,5 +1679,68 @@ mod near_tie_property {
             prop_assert!((identified.lb - lb).abs() < tolerance, "lb {} vs {}", identified.lb, lb);
             prop_assert!((identified.ub - ub).abs() < tolerance, "ub {} vs {}", identified.ub, ub);
         }
+    }
+}
+
+fn surface_counts(random_unit_directions: usize, random_seed: u64) -> SolverCounts {
+    let input = HonestEventStudyInput {
+        betahat: vec![0.0, 0.1, -0.1, 0.2, -0.2],
+        covariance: vec![
+            vec![0.04, 0.0, 0.0, 0.0, 0.0],
+            vec![0.0, 0.04, 0.0, 0.0, 0.0],
+            vec![0.0, 0.0, 0.09, 0.01, 0.0],
+            vec![0.0, 0.0, 0.01, 0.09, 0.0],
+            vec![0.0, 0.0, 0.0, 0.0, 0.09],
+        ],
+        pre_periods: vec![-2, -1],
+        post_periods: vec![0, 1, 2],
+    };
+    let inference = InferenceConfig::new(0.95);
+    let region = assess_honest_event_study_optimization_surface_region_with_config(
+        &input,
+        HonestSensitivity::Smoothness(0.5),
+        inference,
+        0.0,
+        RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        HonestJointPathConfig {
+            method: HonestJointPathMethod::Bonferroni,
+            simulation_draws: 1_000,
+            simulation_seed: 17,
+        },
+        HonestOptimizationSurfaceConfig {
+            include_basis: true,
+            include_pairwise_contrasts: true,
+            random_unit_directions,
+            random_seed,
+        },
+    )
+    .expect("surface region");
+    SolverCounts {
+        retried: region.diagnostics.solver_retries,
+        almost_solved: region.diagnostics.solver_almost_solved,
+    }
+}
+
+#[test]
+fn concurrent_surfaces_report_their_own_solver_counts() {
+    // Random directions of the 40-direction surface make thin cones that need
+    // the SOCP retry for some seeds; the basis-only surface needs none.
+    let (hard_seed, hard_alone) = (0..16)
+        .map(|seed| (seed, surface_counts(40, seed)))
+        .find(|(_, counts)| counts.retried > 0)
+        .expect("some seed needs the retry");
+    let easy_alone = surface_counts(0, 0);
+    assert_eq!(easy_alone.retried, 0);
+    for _ in 0..4 {
+        let (hard_together, easy_together) = std::thread::scope(|scope| {
+            let hard_run = scope.spawn(|| surface_counts(40, hard_seed));
+            let easy_run = scope.spawn(|| surface_counts(0, 0));
+            (
+                hard_run.join().expect("hard"),
+                easy_run.join().expect("easy"),
+            )
+        });
+        assert_eq!(hard_together, hard_alone);
+        assert_eq!(easy_together, easy_alone);
     }
 }

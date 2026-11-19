@@ -27,9 +27,7 @@ use clarabel::solver::{
     DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
 };
 
-use self::least_favorable_intervals::{
-    SmoothnessFlciConfig, build_smoothness_flci_problem, compute_smoothness_flci_with_config,
-};
+use self::least_favorable_intervals::SmoothnessFlciConfig;
 #[cfg(test)]
 use super::adaptive_grid::compute_accepted_grid_range_full_grid;
 use super::adaptive_grid::{
@@ -134,7 +132,11 @@ impl<'a> SmoothnessThetaEvaluator<'a> {
         })
     }
 
-    fn accepts(&mut self, theta: f64) -> Result<bool, String> {
+    fn smoothness_accepts(
+        &mut self,
+        theta: f64,
+        counter: &crate::inference::sensitivity::SolverCounter,
+    ) -> Result<bool, String> {
         for (out, (y, a)) in self
             .shifted_y_arp
             .iter_mut()
@@ -167,6 +169,7 @@ impl<'a> SmoothnessThetaEvaluator<'a> {
             &mut self.s_full_scratch,
             &mut self.sigma_gamma_scratch,
             &mut self.s_t_scratch,
+            counter,
         )
         .map(|rejected| !rejected)
     }
@@ -458,13 +461,18 @@ impl SmoothnessLpWorkspace {
         })
     }
 
-    fn solve_with_q(&mut self, q: &[f64]) -> Result<Option<f64>, String> {
+    fn smoothness_solve_with_q(
+        &mut self,
+        q: &[f64],
+        counter: &crate::inference::sensitivity::SolverCounter,
+    ) -> Result<Option<f64>, String> {
         self.current_q.clear();
         self.current_q.extend_from_slice(q);
         self.solver
             .update_q(&self.current_q)
             .map_err(|err| format!("failed to update smoothness LP objective: {err}"))?;
         self.solver.solve();
+        counter.note_status(self.solver.solution.status);
         match self.solver.solution.status {
             SolverStatus::Solved | SolverStatus::AlmostSolved => Ok(Some(
                 self.objective
@@ -584,6 +592,7 @@ fn fill_sigma_projection(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_smoothness_flci_hybrid_data(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
@@ -592,12 +601,13 @@ fn build_smoothness_flci_hybrid_data(
     constraint_matrix: &[Vec<f64>],
     constraint_bounds: &[f64],
     a_target: &[f64],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<(SmoothnessFlciHybridData, (f64, f64)), String> {
     let inference = InferenceConfig::new(1.0 - hybrid_kappa);
-    let problem = build_smoothness_flci_problem(input, post_weights, m, inference)?;
-    let flci = compute_smoothness_flci_with_config(
+    let problem = crate::inference::sensitivity::smoothness::least_favorable_intervals::build_smoothness_flci_problem_counted(input, post_weights, m, inference, counter)?;
+    let flci = crate::inference::sensitivity::smoothness::least_favorable_intervals::compute_smoothness_flci_with_config_counted(
         &problem,
-        SmoothnessFlciConfig::default_for_production(),
+        SmoothnessFlciConfig::default_for_production(), counter,
     )?;
     let vbar = solve_vbar_projection(constraint_matrix, &flci.optimal_vec)?;
     Ok((
@@ -630,6 +640,7 @@ fn smoothness_dual_conditional_test(
     s_full_scratch: &mut Vec<f64>,
     sigma_gamma_scratch: &mut Vec<f64>,
     s_t_scratch: &mut Vec<f64>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<bool, String> {
     if workspace.solve_in_place(y_arp).is_err() {
         return Ok(true);
@@ -661,6 +672,7 @@ fn smoothness_dual_conditional_test(
         dual_workspace,
         sigma_gamma_scratch,
         s_t_scratch,
+        counter,
     )?
     else {
         return Ok(workspace.eta_star() > 0.0);
@@ -709,6 +721,7 @@ fn compute_honest_linear_sensitivity_identified_set(
     post_weights: &[f64],
     inequalities: &[Vec<f64>],
     d_vec: &[f64],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestIdentifiedSet, String> {
     let num_pre = input.num_pre_periods();
     let num_post = input.num_post_periods();
@@ -724,8 +737,8 @@ fn compute_honest_linear_sensitivity_identified_set(
     let mut workspace =
         SmoothnessLpWorkspace::new(&quadratic, inequalities, &equalities, &rhs, &objective)?;
     let max_q: Vec<f64> = objective.iter().map(|value| -*value).collect();
-    let max_delta = workspace.solve_with_q(&max_q)?;
-    let min_delta = workspace.solve_with_q(&objective)?;
+    let max_delta = workspace.smoothness_solve_with_q(&max_q, counter)?;
+    let min_delta = workspace.smoothness_solve_with_q(&objective, counter)?;
     let estimate = dot(post_weights, &input.betahat[num_pre..]);
     match (max_delta, min_delta) {
         (Some(maximum), Some(minimum)) => Ok(HonestIdentifiedSet {
@@ -740,6 +753,7 @@ fn compute_honest_linear_sensitivity_identified_set(
 }
 
 #[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 fn compute_honest_linear_sensitivity_conditional_cs(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
@@ -748,6 +762,7 @@ fn compute_honest_linear_sensitivity_conditional_cs(
     config: SmoothnessConfidenceSetConfig,
     moments: &SmoothnessMomentSystem,
     identified: &HonestIdentifiedSet,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     let original = compute_original_confidence_set(input, post_weights, inference)?;
     let num_pre = input.num_pre_periods();
@@ -788,6 +803,7 @@ fn compute_honest_linear_sensitivity_conditional_cs(
                 &moments.constraint_matrix,
                 &moments.constraint_bounds,
                 &a_target_full,
+                counter,
             )?;
             (Some(data), interval.0, interval.1)
         }
@@ -815,7 +831,7 @@ fn compute_honest_linear_sensitivity_conditional_cs(
         flci_hybrid.as_ref(),
     )?;
     let Some(accepted_range) =
-        compute_smoothness_accepted_range_adaptive(&grid, anchor_idx, &mut evaluator)?
+        compute_smoothness_accepted_range_adaptive(&grid, anchor_idx, &mut evaluator, counter)?
     else {
         return Err("linear sensitivity conditional CS accepted no grid points".to_string());
     };
@@ -875,6 +891,7 @@ pub(in crate::inference::sensitivity) fn compute_honest_linear_sensitivity_condi
                 &moments.constraint_matrix,
                 &moments.constraint_bounds,
                 &a_target_full,
+                &crate::inference::sensitivity::SolverCounter::new(),
             )?;
             (Some(data), interval.0, interval.1)
         }
@@ -914,8 +931,11 @@ fn compute_smoothness_accepted_range_adaptive(
     grid: &[f64],
     anchor_idx: usize,
     evaluator: &mut SmoothnessThetaEvaluator<'_>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Option<AcceptedGridRange>, String> {
-    compute_accepted_grid_range_adaptive(grid, anchor_idx, |theta| evaluator.accepts(theta))
+    compute_accepted_grid_range_adaptive(grid, anchor_idx, |theta| {
+        evaluator.smoothness_accepts(theta, counter)
+    })
 }
 
 #[cfg(test)]
@@ -923,7 +943,9 @@ fn compute_smoothness_accepted_range_full_grid(
     grid: &[f64],
     evaluator: &mut SmoothnessThetaEvaluator<'_>,
 ) -> Result<Option<AcceptedGridRange>, String> {
-    compute_accepted_grid_range_full_grid(grid, |theta| evaluator.accepts(theta))
+    compute_accepted_grid_range_full_grid(grid, |theta| {
+        evaluator.smoothness_accepts(theta, &crate::inference::sensitivity::SolverCounter::new())
+    })
 }
 
 /// Compute the exact identified set under the smoothness restriction
@@ -936,6 +958,20 @@ pub fn compute_smoothness_identified_set(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
     m: f64,
+) -> Result<HonestIdentifiedSet, String> {
+    compute_smoothness_identified_set_counted(
+        input,
+        post_weights,
+        m,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_smoothness_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestIdentifiedSet, String> {
     input.validate()?;
     if post_weights.len() != input.num_post_periods() {
@@ -957,6 +993,7 @@ pub fn compute_smoothness_identified_set(
         post_weights,
         &build_smoothness_constraint_matrix(num_pre, input.num_post_periods(), false),
         &build_smoothness_constraint_bounds(num_pre, input.num_post_periods(), m, false),
+        counter,
     )
 }
 
@@ -972,12 +1009,29 @@ pub fn compute_smoothness_confidence_set(
     m: f64,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_smoothness_confidence_set_with_config(
+    compute_smoothness_confidence_set_counted(
+        input,
+        post_weights,
+        m,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_smoothness_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_smoothness_confidence_set_with_config_counted(
         input,
         post_weights,
         m,
         inference,
         SmoothnessConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -993,6 +1047,24 @@ pub fn compute_smoothness_confidence_set_with_config(
     m: f64,
     inference: InferenceConfig,
     config: SmoothnessConfidenceSetConfig,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_smoothness_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        m,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_smoothness_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    inference: InferenceConfig,
+    config: SmoothnessConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     input.validate()?;
     if !m.is_finite() || m < 0.0 {
@@ -1015,7 +1087,7 @@ pub fn compute_smoothness_confidence_set_with_config(
     }
     config.validate(inference)?;
 
-    let identified = compute_smoothness_identified_set(input, post_weights, m)?;
+    let identified = compute_smoothness_identified_set_counted(input, post_weights, m, counter)?;
     if !identified.lb.is_finite() || !identified.ub.is_finite() {
         return Ok(HonestConditionalConfidenceSet {
             lb: identified.lb,
@@ -1038,6 +1110,7 @@ pub fn compute_smoothness_confidence_set_with_config(
         config,
         &moments,
         &identified,
+        counter,
     )
 }
 
@@ -1051,6 +1124,22 @@ pub fn compute_signed_smoothness_identified_set(
     post_weights: &[f64],
     m: f64,
     bias_direction: HonestBiasDirection,
+) -> Result<HonestIdentifiedSet, String> {
+    compute_signed_smoothness_identified_set_counted(
+        input,
+        post_weights,
+        m,
+        bias_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_smoothness_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    bias_direction: HonestBiasDirection,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestIdentifiedSet, String> {
     input.validate()?;
     if !m.is_finite() || m < 0.0 {
@@ -1084,6 +1173,7 @@ pub fn compute_signed_smoothness_identified_set(
         post_weights,
         &moments.constraint_matrix,
         &moments.constraint_bounds,
+        counter,
     )
 }
 
@@ -1100,13 +1190,32 @@ pub fn compute_signed_smoothness_confidence_set(
     bias_direction: HonestBiasDirection,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_signed_smoothness_confidence_set_with_config(
+    compute_signed_smoothness_confidence_set_counted(
+        input,
+        post_weights,
+        m,
+        bias_direction,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_smoothness_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    bias_direction: HonestBiasDirection,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_signed_smoothness_confidence_set_with_config_counted(
         input,
         post_weights,
         m,
         bias_direction,
         inference,
         SmoothnessConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -1124,6 +1233,26 @@ pub fn compute_signed_smoothness_confidence_set_with_config(
     inference: InferenceConfig,
     config: SmoothnessConfidenceSetConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_signed_smoothness_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        m,
+        bias_direction,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_smoothness_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    bias_direction: HonestBiasDirection,
+    inference: InferenceConfig,
+    config: SmoothnessConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
     input.validate()?;
     if !m.is_finite() || m < 0.0 {
         return Err(format!(
@@ -1144,8 +1273,13 @@ pub fn compute_signed_smoothness_confidence_set_with_config(
         return Err("post_weights must contain at least one non-zero weight".to_string());
     }
     config.validate(inference)?;
-    let identified =
-        compute_signed_smoothness_identified_set(input, post_weights, m, bias_direction)?;
+    let identified = compute_signed_smoothness_identified_set_counted(
+        input,
+        post_weights,
+        m,
+        bias_direction,
+        counter,
+    )?;
     if !identified.lb.is_finite() || !identified.ub.is_finite() {
         return Ok(HonestConditionalConfidenceSet {
             lb: identified.lb,
@@ -1167,6 +1301,7 @@ pub fn compute_signed_smoothness_confidence_set_with_config(
         config,
         &moments,
         &identified,
+        counter,
     )
 }
 
@@ -1180,6 +1315,22 @@ pub fn compute_monotone_smoothness_identified_set(
     post_weights: &[f64],
     m: f64,
     monotonicity_direction: HonestMonotonicityDirection,
+) -> Result<HonestIdentifiedSet, String> {
+    compute_monotone_smoothness_identified_set_counted(
+        input,
+        post_weights,
+        m,
+        monotonicity_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_smoothness_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestIdentifiedSet, String> {
     input.validate()?;
     if !m.is_finite() || m < 0.0 {
@@ -1213,6 +1364,7 @@ pub fn compute_monotone_smoothness_identified_set(
         post_weights,
         &moments.constraint_matrix,
         &moments.constraint_bounds,
+        counter,
     )
 }
 
@@ -1229,13 +1381,32 @@ pub fn compute_monotone_smoothness_confidence_set(
     monotonicity_direction: HonestMonotonicityDirection,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_monotone_smoothness_confidence_set_with_config(
+    compute_monotone_smoothness_confidence_set_counted(
+        input,
+        post_weights,
+        m,
+        monotonicity_direction,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_smoothness_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_monotone_smoothness_confidence_set_with_config_counted(
         input,
         post_weights,
         m,
         monotonicity_direction,
         inference,
         SmoothnessConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -1252,6 +1423,26 @@ pub fn compute_monotone_smoothness_confidence_set_with_config(
     monotonicity_direction: HonestMonotonicityDirection,
     inference: InferenceConfig,
     config: SmoothnessConfidenceSetConfig,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_monotone_smoothness_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        m,
+        monotonicity_direction,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_smoothness_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    inference: InferenceConfig,
+    config: SmoothnessConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     input.validate()?;
     if !m.is_finite() || m < 0.0 {
@@ -1273,8 +1464,13 @@ pub fn compute_monotone_smoothness_confidence_set_with_config(
         return Err("post_weights must contain at least one non-zero weight".to_string());
     }
     config.validate(inference)?;
-    let identified =
-        compute_monotone_smoothness_identified_set(input, post_weights, m, monotonicity_direction)?;
+    let identified = compute_monotone_smoothness_identified_set_counted(
+        input,
+        post_weights,
+        m,
+        monotonicity_direction,
+        counter,
+    )?;
     if !identified.lb.is_finite() || !identified.ub.is_finite() {
         return Ok(HonestConditionalConfidenceSet {
             lb: identified.lb,
@@ -1296,5 +1492,6 @@ pub fn compute_monotone_smoothness_confidence_set_with_config(
         config,
         &moments,
         &identified,
+        counter,
     )
 }

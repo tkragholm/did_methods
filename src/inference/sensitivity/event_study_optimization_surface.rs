@@ -11,9 +11,7 @@ use super::super::super::{
     HonestJointPathConfig, HonestOptimizationSurfaceAdaptiveRunConfig,
     HonestOptimizationSurfaceConfig, HonestSensitivity, RelativeMagnitudeConfidenceSetConfig,
 };
-use super::directional_region::{
-    assess_honest_event_study_directional_region_with_config, calibrate_directional_region,
-};
+use super::directional_region::calibrate_directional_region;
 use crate::types::InferenceConfig;
 
 const DIRECTION_DEDUP_SCALE: f64 = 1e10;
@@ -314,21 +312,45 @@ pub fn assess_honest_event_study_optimization_surface_region_with_config(
     joint_config: HonestJointPathConfig,
     surface_config: HonestOptimizationSurfaceConfig,
 ) -> Result<HonestDirectionalRegion, String> {
+    assess_honest_event_study_optimization_surface_region_with_config_counted(
+        input,
+        sensitivity,
+        inference,
+        null_value,
+        relative_magnitude_config,
+        joint_config,
+        surface_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_optimization_surface_region_with_config_counted(
+    input: &HonestEventStudyInput,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
+    joint_config: HonestJointPathConfig,
+    surface_config: HonestOptimizationSurfaceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestDirectionalRegion, String> {
     let direction_set =
         generate_optimization_surface_directions(input.num_post_periods(), surface_config)?;
-    let mut region = assess_honest_event_study_directional_region_with_config(
+    let mut region = super::directional_region::assess_honest_event_study_directional_region_with_config_counted(
         input,
         &direction_set.directions,
         sensitivity,
         inference,
         null_value,
         relative_magnitude_config,
-        joint_config,
+        joint_config, counter,
     )?;
     region.diagnostics = HonestDirectionalRegionDiagnostics::fixed(
         direction_set.directions.len(),
         direction_set.random_direction_count,
-    );
+    )
+    .with_solver_counts(counter.counts());
     Ok(region)
 }
 
@@ -351,11 +373,29 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive_with_confi
     null_value: f64,
     config: HonestOptimizationSurfaceAdaptiveRunConfig,
 ) -> Result<HonestDirectionalRegion, String> {
+    assess_honest_event_study_optimization_surface_region_adaptive_with_config_counted(
+        input,
+        sensitivity,
+        inference,
+        null_value,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_optimization_surface_region_adaptive_with_config_counted(
+    input: &HonestEventStudyInput,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    config: HonestOptimizationSurfaceAdaptiveRunConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestDirectionalRegion, String> {
     let total_started = Instant::now();
     config.adaptive.validate()?;
 
     if config.surface.random_unit_directions == 0 {
-        return assess_honest_event_study_optimization_surface_region_with_config(
+        return assess_honest_event_study_optimization_surface_region_with_config_counted(
             input,
             sensitivity,
             inference,
@@ -363,6 +403,7 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive_with_confi
             config.relative_magnitude,
             config.joint,
             config.surface,
+            counter,
         );
     }
 
@@ -469,7 +510,7 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive_with_confi
     let mut cfg = config.surface;
     cfg.random_unit_directions = chosen_random_draw;
     let final_started = Instant::now();
-    let mut region = assess_honest_event_study_optimization_surface_region_with_config(
+    let mut region = assess_honest_event_study_optimization_surface_region_with_config_counted(
         input,
         sensitivity,
         inference,
@@ -477,6 +518,7 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive_with_confi
         config.relative_magnitude,
         config.joint,
         cfg,
+        counter,
     )?;
     let settled_random_count = region.diagnostics.random_direction_count;
     emit_optimization_surface_timing(
@@ -492,7 +534,8 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive_with_confi
         settled_random_count,
         iterations + 1,
         did_converge,
-    );
+    )
+    .with_solver_counts(counter.counts());
     emit_optimization_surface_timing(
         "total",
         sensitivity,
@@ -515,12 +558,29 @@ pub fn assess_honest_event_study_optimization_surface_region_adaptive(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestDirectionalRegion, String> {
-    assess_honest_event_study_optimization_surface_region_adaptive_with_config(
+    assess_honest_event_study_optimization_surface_region_adaptive_counted(
+        input,
+        sensitivity,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_optimization_surface_region_adaptive_counted(
+    input: &HonestEventStudyInput,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestDirectionalRegion, String> {
+    assess_honest_event_study_optimization_surface_region_adaptive_with_config_counted(
         input,
         sensitivity,
         inference,
         null_value,
         HonestOptimizationSurfaceAdaptiveRunConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -535,8 +595,24 @@ pub fn assess_honest_event_study_optimization_surface_region(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestDirectionalRegion, String> {
+    assess_honest_event_study_optimization_surface_region_counted(
+        input,
+        sensitivity,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_optimization_surface_region_counted(
+    input: &HonestEventStudyInput,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestDirectionalRegion, String> {
     let surface_config = HonestOptimizationSurfaceConfig::default_for_production();
-    assess_honest_event_study_optimization_surface_region_with_config(
+    assess_honest_event_study_optimization_surface_region_with_config_counted(
         input,
         sensitivity,
         inference,
@@ -544,6 +620,7 @@ pub fn assess_honest_event_study_optimization_surface_region(
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
         HonestJointPathConfig::default_for_production(),
         surface_config,
+        counter,
     )
 }
 

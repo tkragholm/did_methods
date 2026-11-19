@@ -19,6 +19,20 @@
 library(HonestDiD)
 library(jsonlite)
 
+# Each C-LF call simulates 200,000 draws and solves one linear program per draw,
+# so the independent directions run on separate cores.
+n_cores <- max(1, parallel::detectCores() - 2)
+
+# HonestDiD computes the least-favorable critical value of the C-LF test from
+# `sims` = 1000 draws, and no exported function lets a caller change that. The
+# Rust side compares against these references within a multiple of its own Monte
+# Carlo standard error, which only works if R's error is negligible beside it.
+# So the internal default is raised to 200,000 for this session.
+lf_cv_with_more_draws <- HonestDiD:::.compute_least_favorable_cv
+formals(lf_cv_with_more_draws)$sims <- 200000
+assignInNamespace(".compute_least_favorable_cv", lf_cv_with_more_draws, ns = "HonestDiD")
+stopifnot(formals(HonestDiD:::.compute_least_favorable_cv)$sims == 200000)
+
 base_path <- "tests/"
 data(BCdata_EventStudy)
 
@@ -74,7 +88,7 @@ basis <- lapply(seq_len(num_post), function(i) {
 # --- joint path: one basis direction per post period, Bonferroni over periods ---
 alpha_pointwise_joint <- alpha_joint / num_post
 cat("joint path (alpha_pointwise =", alpha_pointwise_joint, ")\n")
-joint_points <- lapply(seq_len(num_post), function(i) {
+joint_points <- parallel::mclapply(mc.cores = n_cores, seq_len(num_post), function(i) {
   b <- clf_bounds(basis[[i]], alpha_pointwise_joint, paste0("period_", i - 1))
   list(post_period = i - 1, lb = b$lb, ub = b$ub)
 })
@@ -109,7 +123,7 @@ directions <- c(
 
 alpha_pointwise_dir <- alpha_joint / length(directions)
 cat("directional (alpha_pointwise =", alpha_pointwise_dir, ")\n")
-directional_points <- lapply(directions, function(dir) {
+directional_points <- parallel::mclapply(mc.cores = n_cores, directions, function(dir) {
   b <- clf_bounds(dir$l_vec, alpha_pointwise_dir, dir$name)
   list(name = dir$name, lb = b$lb, ub = b$ub)
 })
@@ -184,13 +198,13 @@ directional_critical <- max_abs_quantile(corr_dir)
 directional_pointwise <- 2 * pnorm(directional_critical) - 1
 
 cat("gaussian joint (pointwise =", joint_pointwise, ")\n")
-gaussian_joint_points <- lapply(seq_len(num_post), function(i) {
+gaussian_joint_points <- parallel::mclapply(mc.cores = n_cores, seq_len(num_post), function(i) {
   b <- clf_bounds(basis[[i]], 1 - joint_pointwise, paste0("period_", i - 1))
   list(post_period = i - 1, lb = b$lb, ub = b$ub)
 })
 
 cat("gaussian directional (pointwise =", directional_pointwise, ")\n")
-gaussian_directional_points <- lapply(seq_along(gaussian_directions), function(i) {
+gaussian_directional_points <- parallel::mclapply(mc.cores = n_cores, seq_along(gaussian_directions), function(i) {
   name <- if (i <= num_post) paste0("period_", i - 1) else "diff_0_1"
   b <- clf_bounds(gaussian_directions[[i]], 1 - directional_pointwise, name)
   list(name = name, lb = b$lb, ub = b$ub)

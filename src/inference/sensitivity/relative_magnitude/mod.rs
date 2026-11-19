@@ -388,6 +388,7 @@ fn compute_relative_magnitude_identified_set_with_builder<F>(
     post_weights: &[f64],
     min_s: isize,
     build_matrix: F,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestIdentifiedSet, String>
 where
     F: Fn(isize, bool) -> Result<Vec<Vec<f64>>, String> + Sync,
@@ -419,6 +420,7 @@ where
                 &input.betahat,
                 post_weights,
                 &inequality_matrix,
+                counter,
             )
         })
         .collect();
@@ -457,6 +459,7 @@ fn compute_relative_magnitude_confidence_set_with_builder<F>(
     build_matrix: F,
     empty_message: &'static str,
     shared_draws: Option<&[Vec<f64>]>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String>
 where
     F: Fn(isize, bool) -> Result<Vec<Vec<f64>>, String> + Sync,
@@ -498,6 +501,7 @@ where
                 hybrid: config.hybrid,
                 hybrid_kappa: config.hybrid_kappa,
                 least_favorable_draws: config.least_favorable_draws,
+                least_favorable_seed: config.least_favorable_seed,
                 grid: &grid,
                 anchor_idx,
             };
@@ -505,6 +509,7 @@ where
                 &branch_problem,
                 &inequality_matrix,
                 shared_draws.map(|draws| draws[branch_idx].as_slice()),
+                counter,
             )
         })
         .collect();
@@ -572,6 +577,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_family_ident
     post_weights: &[f64],
     mbar: f64,
     family: RelativeMagnitudeFamily,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestIdentifiedSet, String> {
     validate_relative_magnitude_family_inputs(family, input, post_weights, mbar)?;
     let num_pre = input.num_pre_periods();
@@ -584,6 +590,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_family_ident
         move |s, max_positive| {
             family.build_constraint_matrix(num_pre, num_post, mbar, s, max_positive)
         },
+        counter,
     )
 }
 
@@ -594,12 +601,18 @@ fn compute_relative_magnitude_family_conditional_cs_with_config(
     inference: InferenceConfig,
     config: RelativeMagnitudeConfidenceSetConfig,
     family: RelativeMagnitudeFamily,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     validate_relative_magnitude_family_inputs(family, input, post_weights, mbar)?;
     config.validate(inference)?;
     let original = compute_original_confidence_set(input, post_weights, inference)?;
-    let identified =
-        compute_relative_magnitude_family_identified_set(input, post_weights, mbar, family)?;
+    let identified = compute_relative_magnitude_family_identified_set(
+        input,
+        post_weights,
+        mbar,
+        family,
+        counter,
+    )?;
     compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
         input,
         post_weights,
@@ -610,6 +623,7 @@ fn compute_relative_magnitude_family_conditional_cs_with_config(
         &identified,
         family,
         None,
+        counter,
     )
 }
 
@@ -624,6 +638,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_family_condi
     identified: &HonestIdentifiedSet,
     family: RelativeMagnitudeFamily,
     shared_draws: Option<&[Vec<f64>]>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     let num_pre = input.num_pre_periods();
     let num_post = input.num_post_periods();
@@ -640,6 +655,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_family_condi
         },
         family.empty_message(),
         shared_draws,
+        counter,
     )
 }
 
@@ -659,6 +675,7 @@ pub(in crate::inference::sensitivity) fn prepare_relative_magnitude_family_draws
     mbar: f64,
     family: RelativeMagnitudeFamily,
     draws: usize,
+    seed: u64,
 ) -> Result<Vec<Vec<f64>>, String> {
     let num_pre = input.num_pre_periods();
     let num_post = input.num_post_periods();
@@ -675,7 +692,7 @@ pub(in crate::inference::sensitivity) fn prepare_relative_magnitude_family_draws
         .map(|(s, max_positive)| {
             let inequality_matrix =
                 family.build_constraint_matrix(num_pre, num_post, mbar, s, max_positive)?;
-            prepare_relative_magnitude_branch_draws(input, num_pre, &inequality_matrix, draws)
+            prepare_relative_magnitude_branch_draws(input, num_pre, &inequality_matrix, draws, seed)
         })
         .collect()
 }
@@ -694,11 +711,26 @@ pub fn compute_relative_magnitude_identified_set(
     post_weights: &[f64],
     mbar: f64,
 ) -> Result<HonestIdentifiedSet, String> {
+    compute_relative_magnitude_identified_set_counted(
+        input,
+        post_weights,
+        mbar,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestIdentifiedSet, String> {
     compute_relative_magnitude_family_identified_set(
         input,
         post_weights,
         mbar,
         RelativeMagnitudeFamily::Base,
+        counter,
     )
 }
 
@@ -717,12 +749,29 @@ pub fn compute_relative_magnitude_confidence_set(
     mbar: f64,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_relative_magnitude_confidence_set_with_config(
+    compute_relative_magnitude_confidence_set_counted(
+        input,
+        post_weights,
+        mbar,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_relative_magnitude_confidence_set_with_config_counted(
         input,
         post_weights,
         mbar,
         inference,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -746,6 +795,24 @@ pub fn compute_relative_magnitude_confidence_set_with_config(
     inference: InferenceConfig,
     config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_relative_magnitude_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        mbar,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    inference: InferenceConfig,
+    config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
     compute_relative_magnitude_family_conditional_cs_with_config(
         input,
         post_weights,
@@ -753,9 +820,11 @@ pub fn compute_relative_magnitude_confidence_set_with_config(
         inference,
         config,
         RelativeMagnitudeFamily::Base,
+        counter,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_set_with_precomputed_sets(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
@@ -764,6 +833,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
     config: RelativeMagnitudeConfidenceSetConfig,
     original: &HonestOriginalConfidenceSet,
     identified: &HonestIdentifiedSet,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     compute_relative_magnitude_family_conditional_cs_with_precomputed_sets(
         input,
@@ -775,6 +845,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
         identified,
         RelativeMagnitudeFamily::Base,
         None,
+        counter,
     )
 }
 
@@ -790,11 +861,28 @@ pub fn compute_signed_relative_magnitude_identified_set(
     mbar: f64,
     bias_direction: HonestBiasDirection,
 ) -> Result<HonestIdentifiedSet, String> {
+    compute_signed_relative_magnitude_identified_set_counted(
+        input,
+        post_weights,
+        mbar,
+        bias_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_relative_magnitude_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    bias_direction: HonestBiasDirection,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestIdentifiedSet, String> {
     compute_relative_magnitude_family_identified_set(
         input,
         post_weights,
         mbar,
         RelativeMagnitudeFamily::SignedBase(bias_direction),
+        counter,
     )
 }
 
@@ -811,13 +899,32 @@ pub fn compute_signed_relative_magnitude_confidence_set(
     bias_direction: HonestBiasDirection,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_signed_relative_magnitude_confidence_set_with_config(
+    compute_signed_relative_magnitude_confidence_set_counted(
+        input,
+        post_weights,
+        mbar,
+        bias_direction,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_relative_magnitude_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    bias_direction: HonestBiasDirection,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_signed_relative_magnitude_confidence_set_with_config_counted(
         input,
         post_weights,
         mbar,
         bias_direction,
         inference,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -835,6 +942,26 @@ pub fn compute_signed_relative_magnitude_confidence_set_with_config(
     inference: InferenceConfig,
     config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_signed_relative_magnitude_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        mbar,
+        bias_direction,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_relative_magnitude_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    bias_direction: HonestBiasDirection,
+    inference: InferenceConfig,
+    config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
     compute_relative_magnitude_family_conditional_cs_with_config(
         input,
         post_weights,
@@ -842,6 +969,7 @@ pub fn compute_signed_relative_magnitude_confidence_set_with_config(
         inference,
         config,
         RelativeMagnitudeFamily::SignedBase(bias_direction),
+        counter,
     )
 }
 
@@ -857,11 +985,28 @@ pub fn compute_monotone_relative_magnitude_identified_set(
     mbar: f64,
     monotonicity_direction: HonestMonotonicityDirection,
 ) -> Result<HonestIdentifiedSet, String> {
+    compute_monotone_relative_magnitude_identified_set_counted(
+        input,
+        post_weights,
+        mbar,
+        monotonicity_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_relative_magnitude_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestIdentifiedSet, String> {
     compute_relative_magnitude_family_identified_set(
         input,
         post_weights,
         mbar,
         RelativeMagnitudeFamily::MonotoneBase(monotonicity_direction),
+        counter,
     )
 }
 
@@ -878,13 +1023,32 @@ pub fn compute_monotone_relative_magnitude_confidence_set(
     monotonicity_direction: HonestMonotonicityDirection,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_monotone_relative_magnitude_confidence_set_with_config(
+    compute_monotone_relative_magnitude_confidence_set_counted(
+        input,
+        post_weights,
+        mbar,
+        monotonicity_direction,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_relative_magnitude_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_monotone_relative_magnitude_confidence_set_with_config_counted(
         input,
         post_weights,
         mbar,
         monotonicity_direction,
         inference,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -902,6 +1066,26 @@ pub fn compute_monotone_relative_magnitude_confidence_set_with_config(
     inference: InferenceConfig,
     config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_monotone_relative_magnitude_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        mbar,
+        monotonicity_direction,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_relative_magnitude_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    inference: InferenceConfig,
+    config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
     compute_relative_magnitude_family_conditional_cs_with_config(
         input,
         post_weights,
@@ -909,6 +1093,7 @@ pub fn compute_monotone_relative_magnitude_confidence_set_with_config(
         inference,
         config,
         RelativeMagnitudeFamily::MonotoneBase(monotonicity_direction),
+        counter,
     )
 }
 
@@ -923,11 +1108,26 @@ pub fn compute_linear_trend_relative_magnitude_identified_set(
     post_weights: &[f64],
     mbar: f64,
 ) -> Result<HonestIdentifiedSet, String> {
+    compute_linear_trend_relative_magnitude_identified_set_counted(
+        input,
+        post_weights,
+        mbar,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_linear_trend_relative_magnitude_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestIdentifiedSet, String> {
     compute_relative_magnitude_family_identified_set(
         input,
         post_weights,
         mbar,
         RelativeMagnitudeFamily::Linear,
+        counter,
     )
 }
 
@@ -943,12 +1143,29 @@ pub fn compute_linear_trend_relative_magnitude_confidence_set(
     mbar: f64,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_linear_trend_relative_magnitude_confidence_set_with_config(
+    compute_linear_trend_relative_magnitude_confidence_set_counted(
+        input,
+        post_weights,
+        mbar,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_linear_trend_relative_magnitude_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_linear_trend_relative_magnitude_confidence_set_with_config_counted(
         input,
         post_weights,
         mbar,
         inference,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -965,6 +1182,24 @@ pub fn compute_linear_trend_relative_magnitude_confidence_set_with_config(
     inference: InferenceConfig,
     config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_linear_trend_relative_magnitude_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        mbar,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_linear_trend_relative_magnitude_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    inference: InferenceConfig,
+    config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
     compute_relative_magnitude_family_conditional_cs_with_config(
         input,
         post_weights,
@@ -972,6 +1207,7 @@ pub fn compute_linear_trend_relative_magnitude_confidence_set_with_config(
         inference,
         config,
         RelativeMagnitudeFamily::Linear,
+        counter,
     )
 }
 
@@ -987,11 +1223,28 @@ pub fn compute_signed_linear_trend_relative_magnitude_identified_set(
     mbar: f64,
     bias_direction: HonestBiasDirection,
 ) -> Result<HonestIdentifiedSet, String> {
+    compute_signed_linear_trend_relative_magnitude_identified_set_counted(
+        input,
+        post_weights,
+        mbar,
+        bias_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_linear_trend_relative_magnitude_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    bias_direction: HonestBiasDirection,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestIdentifiedSet, String> {
     compute_relative_magnitude_family_identified_set(
         input,
         post_weights,
         mbar,
         RelativeMagnitudeFamily::SignedLinear(bias_direction),
+        counter,
     )
 }
 
@@ -1008,13 +1261,32 @@ pub fn compute_signed_linear_trend_relative_magnitude_confidence_set(
     bias_direction: HonestBiasDirection,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_signed_linear_trend_relative_magnitude_confidence_set_with_config(
+    compute_signed_linear_trend_relative_magnitude_confidence_set_counted(
+        input,
+        post_weights,
+        mbar,
+        bias_direction,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_linear_trend_relative_magnitude_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    bias_direction: HonestBiasDirection,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_signed_linear_trend_relative_magnitude_confidence_set_with_config_counted(
         input,
         post_weights,
         mbar,
         bias_direction,
         inference,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -1032,6 +1304,26 @@ pub fn compute_signed_linear_trend_relative_magnitude_confidence_set_with_config
     inference: InferenceConfig,
     config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_signed_linear_trend_relative_magnitude_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        mbar,
+        bias_direction,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_signed_linear_trend_relative_magnitude_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    bias_direction: HonestBiasDirection,
+    inference: InferenceConfig,
+    config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
     compute_relative_magnitude_family_conditional_cs_with_config(
         input,
         post_weights,
@@ -1039,6 +1331,7 @@ pub fn compute_signed_linear_trend_relative_magnitude_confidence_set_with_config
         inference,
         config,
         RelativeMagnitudeFamily::SignedLinear(bias_direction),
+        counter,
     )
 }
 
@@ -1054,11 +1347,28 @@ pub fn compute_monotone_linear_trend_relative_magnitude_identified_set(
     mbar: f64,
     monotonicity_direction: HonestMonotonicityDirection,
 ) -> Result<HonestIdentifiedSet, String> {
+    compute_monotone_linear_trend_relative_magnitude_identified_set_counted(
+        input,
+        post_weights,
+        mbar,
+        monotonicity_direction,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_linear_trend_relative_magnitude_identified_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestIdentifiedSet, String> {
     compute_relative_magnitude_family_identified_set(
         input,
         post_weights,
         mbar,
         RelativeMagnitudeFamily::MonotoneLinear(monotonicity_direction),
+        counter,
     )
 }
 
@@ -1075,13 +1385,32 @@ pub fn compute_monotone_linear_trend_relative_magnitude_confidence_set(
     monotonicity_direction: HonestMonotonicityDirection,
     inference: InferenceConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
-    compute_monotone_linear_trend_relative_magnitude_confidence_set_with_config(
+    compute_monotone_linear_trend_relative_magnitude_confidence_set_counted(
+        input,
+        post_weights,
+        mbar,
+        monotonicity_direction,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_linear_trend_relative_magnitude_confidence_set_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_monotone_linear_trend_relative_magnitude_confidence_set_with_config_counted(
         input,
         post_weights,
         mbar,
         monotonicity_direction,
         inference,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
+        counter,
     )
 }
 
@@ -1099,6 +1428,26 @@ pub fn compute_monotone_linear_trend_relative_magnitude_confidence_set_with_conf
     inference: InferenceConfig,
     config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<HonestConditionalConfidenceSet, String> {
+    compute_monotone_linear_trend_relative_magnitude_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        mbar,
+        monotonicity_direction,
+        inference,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_monotone_linear_trend_relative_magnitude_confidence_set_with_config_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    inference: InferenceConfig,
+    config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestConditionalConfidenceSet, String> {
     compute_relative_magnitude_family_conditional_cs_with_config(
         input,
         post_weights,
@@ -1106,5 +1455,6 @@ pub fn compute_monotone_linear_trend_relative_magnitude_confidence_set_with_conf
         inference,
         config,
         RelativeMagnitudeFamily::MonotoneLinear(monotonicity_direction),
+        counter,
     )
 }

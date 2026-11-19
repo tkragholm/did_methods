@@ -78,7 +78,7 @@ pub use inference::sensitivity::{
     RelativeMagnitudeFlciProblem, RelativeMagnitudeFlciResult, RelativeMagnitudeHybrid,
     RelativeMagnitudeMultiFlciPoint, RelativeMagnitudeMultiFlciProblem,
     RelativeMagnitudeMultiFlciResult, SensitivitySummary, SensitivitySummaryMethod,
-    SensitivitySummaryRow, assess_honest_event_study_directional_region,
+    SensitivitySummaryRow, SolverCounts, assess_honest_event_study_directional_region,
     assess_honest_event_study_directional_region_with_config, assess_honest_event_study_functional,
     assess_honest_event_study_functional_with_config, assess_honest_event_study_joint_path_region,
     assess_honest_event_study_joint_path_region_with_config,

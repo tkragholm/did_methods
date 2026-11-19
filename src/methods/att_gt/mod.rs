@@ -135,13 +135,13 @@ impl EventTimeResult {
 
     /// Access the standard error for a specific event-time estimate.
     ///
-    /// Returns 0.0 if the event time is not present in the results.
+    /// Returns NaN if the event time is not present in the results.
     #[must_use]
     pub fn se_at(&self, event_time: i32) -> f64 {
         self.estimates
             .iter()
             .find(|est| est.event_time == event_time)
-            .map_or(0.0, |est| est.summary.se)
+            .map_or(f64::NAN, |est| est.summary.se)
     }
 
     /// Access the confidence interval for a specific event-time estimate by index.

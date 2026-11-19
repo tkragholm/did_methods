@@ -19,7 +19,7 @@ impl OutcomeModel for LinearOutcome {
         design: MatRef<'_, f64>,
         target: MatRef<'_, f64>,
         weights: Option<&[f64]>,
-    ) -> Mat<f64> {
+    ) -> Result<Mat<f64>, &'static str> {
         weights.map_or_else(
             || {
                 let a = design.transpose() * design;

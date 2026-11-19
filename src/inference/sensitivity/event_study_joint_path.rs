@@ -31,13 +31,30 @@ pub fn assess_honest_event_study_joint_path_region(
     inference: InferenceConfig,
     null_value: f64,
 ) -> Result<HonestJointPathRegion, String> {
-    assess_honest_event_study_joint_path_region_with_config(
+    assess_honest_event_study_joint_path_region_counted(
+        input,
+        sensitivity,
+        inference,
+        null_value,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_joint_path_region_counted(
+    input: &HonestEventStudyInput,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestJointPathRegion, String> {
+    assess_honest_event_study_joint_path_region_with_config_counted(
         input,
         sensitivity,
         inference,
         null_value,
         RelativeMagnitudeConfidenceSetConfig::from_inference(inference),
         HonestJointPathConfig::default_for_production(),
+        counter,
     )
 }
 
@@ -142,6 +159,26 @@ pub fn assess_honest_event_study_joint_path_region_with_config(
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
     joint_config: HonestJointPathConfig,
 ) -> Result<HonestJointPathRegion, String> {
+    assess_honest_event_study_joint_path_region_with_config_counted(
+        input,
+        sensitivity,
+        inference,
+        null_value,
+        relative_magnitude_config,
+        joint_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn assess_honest_event_study_joint_path_region_with_config_counted(
+    input: &HonestEventStudyInput,
+    sensitivity: HonestSensitivity,
+    inference: InferenceConfig,
+    null_value: f64,
+    relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
+    joint_config: HonestJointPathConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<HonestJointPathRegion, String> {
     assess_honest_event_study_joint_path_region_with_optional_prepared_relative_magnitude(
         input,
         sensitivity,
@@ -150,9 +187,11 @@ pub fn assess_honest_event_study_joint_path_region_with_config(
         relative_magnitude_config,
         joint_config,
         None,
+        counter,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(in crate::inference::sensitivity::event_study_assessment) fn assess_honest_event_study_joint_path_region_with_optional_prepared_relative_magnitude(
     input: &HonestEventStudyInput,
     sensitivity: HonestSensitivity,
@@ -161,6 +200,7 @@ pub(in crate::inference::sensitivity::event_study_assessment) fn assess_honest_e
     relative_magnitude_config: RelativeMagnitudeConfidenceSetConfig,
     joint_config: HonestJointPathConfig,
     prepared_relative_magnitude: Option<&super::super::PreparedRelativeMagnitudeBaseContext>,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestJointPathRegion, String> {
     input.validate()?;
     let (pointwise_confidence_level, calibrated_max_t_critical_value) =
@@ -187,11 +227,13 @@ pub(in crate::inference::sensitivity::event_study_assessment) fn assess_honest_e
                 basis_weights
                     .par_iter()
                     .map(|post_weights| {
-                        super::super::prepare_relative_magnitude_functional_branches(
-                            post_weights,
-                            &prepared.branches,
-                            &prepared.input_branches,
-                        )
+                        {
+                            super::super::prepare_relative_magnitude_functional_branches(
+                                post_weights,
+                                &prepared.branches,
+                                &prepared.input_branches,
+                            )
+                        }
                     })
                     .collect::<Result<Vec<_>, String>>()?,
             ),
@@ -201,6 +243,7 @@ pub(in crate::inference::sensitivity::event_study_assessment) fn assess_honest_e
         hybrid: relative_magnitude_config.hybrid,
         hybrid_kappa: pointwise_relative_magnitude_config.hybrid_kappa,
         least_favorable_draws: relative_magnitude_config.least_favorable_draws,
+        least_favorable_seed: relative_magnitude_config.least_favorable_seed,
     };
     let points = input
         .post_periods
@@ -223,16 +266,16 @@ pub(in crate::inference::sensitivity::event_study_assessment) fn assess_honest_e
                         relative_magnitude_pointwise_config,
                         &prepared.branches,
                         &prepared.input_branches,
-                        &prepared_functional_branch_sets[point_index],
+                        &prepared_functional_branch_sets[point_index], counter,
                     )?
                 }
-                _ => super::super::assess_honest_event_study_post_functional_with_config(
+                _ => super::super::assess_honest_event_study_post_functional_with_config_counted(
                     input,
                     &functional,
                     sensitivity,
                     pointwise_inference,
                     null_value,
-                    relative_magnitude_config,
+                    relative_magnitude_config, counter,
                 )?,
             };
             Ok(HonestJointPathPoint {

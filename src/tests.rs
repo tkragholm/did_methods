@@ -430,11 +430,15 @@ fn linear_outcome_fit_and_predict_cover_weighted_and_unweighted_paths() {
     let target = Mat::from_fn(3, 1, |row, _| [1.0, 3.0, 5.0][row]);
     let model = LinearOutcome::default();
 
-    let beta_unweighted = model.fit(design.as_ref(), target.as_ref(), None);
+    let beta_unweighted = model
+        .fit(design.as_ref(), target.as_ref(), None)
+        .expect("fit");
     assert!((beta_unweighted.get(0, 0) - 1.0).abs() < 1e-6);
     assert!((beta_unweighted.get(1, 0) - 2.0).abs() < 1e-6);
 
-    let beta_weighted = model.fit(design.as_ref(), target.as_ref(), Some(&[1.0, 2.0, 1.0]));
+    let beta_weighted = model
+        .fit(design.as_ref(), target.as_ref(), Some(&[1.0, 2.0, 1.0]))
+        .expect("fit");
     assert!((beta_weighted.get(0, 0) - 1.0).abs() < 1e-6);
     assert!((beta_weighted.get(1, 0) - 2.0).abs() < 1e-6);
 
@@ -478,7 +482,9 @@ fn linalg_helpers_cover_matrix_products_and_ridge_solver() {
         (1, 1) => 4.0,
         _ => 0.0,
     });
-    let sol = ridge_solve_lu(a, &b, 2.0);
+    let sol = ridge_solve_lu(a, &b, 2.0).expect("finite solution");
+    let singular = Mat::from_fn(2, 2, |_, _| 0.0);
+    assert!(ridge_solve_lu(singular, &b, 0.0).is_err());
     assert!((sol.get(0, 0) - 1.0).abs() < 1e-12);
     assert!((sol.get(1, 0) - (8.0 / 6.0)).abs() < 1e-12);
 }

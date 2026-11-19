@@ -34,16 +34,13 @@ use super::super::{
     RelativeMagnitudeConfidenceSetConfig, RelativeMagnitudeMultiFlciPoint,
     RelativeMagnitudeMultiFlciResult,
 };
+use super::compute_original_confidence_set;
 use super::conditional_confidence_set::{
     RelativeMagnitudePreparedFunctionalBranch, RelativeMagnitudePreparedInputBranch,
     compute_relative_magnitude_confidence_set_with_prepared_functional_branches,
     prepare_relative_magnitude_functional_branches, prepare_relative_magnitude_input_branches,
 };
 use super::geometry::{RelativeMagnitudePreparedBranch, prepare_relative_magnitude_branches};
-use super::{
-    compute_original_confidence_set, compute_relative_magnitude_confidence_set_with_config,
-    compute_relative_magnitude_identified_set,
-};
 use crate::inference::validate_confidence_level;
 use crate::util::usize_to_f64;
 
@@ -122,8 +119,24 @@ pub fn build_relative_magnitude_flci_problem(
     mbar: f64,
     inference: InferenceConfig,
 ) -> Result<RelativeMagnitudeFlciProblem, String> {
+    build_relative_magnitude_flci_problem_counted(
+        input,
+        post_weights,
+        mbar,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn build_relative_magnitude_flci_problem_counted(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    mbar: f64,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<RelativeMagnitudeFlciProblem, String> {
     let original = compute_original_confidence_set(input, post_weights, inference)?;
-    let identified_set = compute_relative_magnitude_identified_set(input, post_weights, mbar)?;
+    let identified_set = crate::inference::sensitivity::relative_magnitude::compute_relative_magnitude_identified_set_counted(input, post_weights, mbar, counter)?;
     Ok(RelativeMagnitudeFlciProblem {
         input: input.clone(),
         post_weights: post_weights.to_vec(),
@@ -143,9 +156,20 @@ pub fn build_relative_magnitude_flci_problem(
 pub fn compute_relative_magnitude_flci(
     problem: &RelativeMagnitudeFlciProblem,
 ) -> Result<RelativeMagnitudeFlciResult, String> {
-    compute_relative_magnitude_flci_with_config(
+    compute_relative_magnitude_flci_counted(
+        problem,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_flci_counted(
+    problem: &RelativeMagnitudeFlciProblem,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<RelativeMagnitudeFlciResult, String> {
+    compute_relative_magnitude_flci_with_config_counted(
         problem,
         RelativeMagnitudeConfidenceSetConfig::from_inference(problem.inference),
+        counter,
     )
 }
 
@@ -162,13 +186,25 @@ pub fn compute_relative_magnitude_flci_with_config(
     problem: &RelativeMagnitudeFlciProblem,
     config: RelativeMagnitudeConfidenceSetConfig,
 ) -> Result<RelativeMagnitudeFlciResult, String> {
+    compute_relative_magnitude_flci_with_config_counted(
+        problem,
+        config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_flci_with_config_counted(
+    problem: &RelativeMagnitudeFlciProblem,
+    config: RelativeMagnitudeConfidenceSetConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<RelativeMagnitudeFlciResult, String> {
     let conditional: HonestConditionalConfidenceSet =
-        compute_relative_magnitude_confidence_set_with_config(
+        crate::inference::sensitivity::relative_magnitude::compute_relative_magnitude_confidence_set_with_config_counted(
             &problem.input,
             &problem.post_weights,
             problem.mbar,
             problem.inference,
-            config,
+            config, counter,
         )?;
     Ok(RelativeMagnitudeFlciResult {
         flci: (conditional.lb, conditional.ub),
@@ -188,6 +224,22 @@ pub fn build_relative_magnitude_multi_flci_problem(
     mbar: f64,
     inference: InferenceConfig,
 ) -> Result<RelativeMagnitudeMultiFlciProblem, String> {
+    build_relative_magnitude_multi_flci_problem_counted(
+        input,
+        post_weight_sets,
+        mbar,
+        inference,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn build_relative_magnitude_multi_flci_problem_counted(
+    input: &HonestEventStudyInput,
+    post_weight_sets: &[Vec<f64>],
+    mbar: f64,
+    inference: InferenceConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<RelativeMagnitudeMultiFlciProblem, String> {
     if post_weight_sets.is_empty() {
         return Err("multi FLCI requires at least one functional".to_string());
     }
@@ -199,10 +251,10 @@ pub fn build_relative_magnitude_multi_flci_problem(
             post_weights,
             inference,
         )?);
-        identified_sets.push(compute_relative_magnitude_identified_set(
+        identified_sets.push(crate::inference::sensitivity::relative_magnitude::compute_relative_magnitude_identified_set_counted(
             input,
             post_weights,
-            mbar,
+            mbar, counter,
         )?);
     }
     Ok(RelativeMagnitudeMultiFlciProblem {
@@ -392,10 +444,21 @@ fn joint_pointwise_confidence_level(
 pub fn compute_relative_magnitude_multi_flci(
     problem: &RelativeMagnitudeMultiFlciProblem,
 ) -> Result<RelativeMagnitudeMultiFlciResult, String> {
-    compute_relative_magnitude_multi_flci_with_config(
+    compute_relative_magnitude_multi_flci_counted(
+        problem,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_counted(
+    problem: &RelativeMagnitudeMultiFlciProblem,
+    counter: &crate::inference::sensitivity::SolverCounter,
+) -> Result<RelativeMagnitudeMultiFlciResult, String> {
+    compute_relative_magnitude_multi_flci_with_config_counted(
         problem,
         RelativeMagnitudeConfidenceSetConfig::from_inference(problem.inference),
         HonestJointPathConfig::default_for_production(),
+        counter,
     )
 }
 
@@ -408,6 +471,20 @@ pub fn compute_relative_magnitude_multi_flci_with_config(
     problem: &RelativeMagnitudeMultiFlciProblem,
     config: RelativeMagnitudeConfidenceSetConfig,
     joint_config: HonestJointPathConfig,
+) -> Result<RelativeMagnitudeMultiFlciResult, String> {
+    compute_relative_magnitude_multi_flci_with_config_counted(
+        problem,
+        config,
+        joint_config,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_with_config_counted(
+    problem: &RelativeMagnitudeMultiFlciProblem,
+    config: RelativeMagnitudeConfidenceSetConfig,
+    joint_config: HonestJointPathConfig,
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<RelativeMagnitudeMultiFlciResult, String> {
     let prepared_branches = prepare_relative_magnitude_branches(
         problem.input.num_pre_periods(),
@@ -422,6 +499,7 @@ pub fn compute_relative_magnitude_multi_flci_with_config(
         joint_config,
         &prepared_branches,
         &prepared_input_branches,
+        counter,
     )
 }
 
@@ -431,6 +509,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_w
     joint_config: HonestJointPathConfig,
     prepared_branches: &[RelativeMagnitudePreparedBranch],
     prepared_input_branches: &[RelativeMagnitudePreparedInputBranch],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<RelativeMagnitudeMultiFlciResult, String> {
     let prepared_functional_branch_sets = problem
         .post_weight_sets
@@ -450,6 +529,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_w
         prepared_branches,
         prepared_input_branches,
         &prepared_functional_branch_sets,
+        counter,
     )
 }
 
@@ -460,6 +540,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_w
     prepared_branches: &[RelativeMagnitudePreparedBranch],
     prepared_input_branches: &[RelativeMagnitudePreparedInputBranch],
     prepared_functional_branch_sets: &[Vec<RelativeMagnitudePreparedFunctionalBranch>],
+    counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<RelativeMagnitudeMultiFlciResult, String> {
     let (pointwise_confidence_level, calibrated_max_t_critical_value) =
         joint_pointwise_confidence_level(problem, joint_config)?;
@@ -473,6 +554,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_w
         hybrid: config.hybrid,
         hybrid_kappa: pointwise_default.hybrid_kappa,
         least_favorable_draws: config.least_favorable_draws,
+        least_favorable_seed: config.least_favorable_seed,
     };
     if prepared_functional_branch_sets.len() != problem.post_weight_sets.len() {
         return Err(format!(
@@ -501,12 +583,12 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_w
         let post_weights = &problem.post_weight_sets[0];
         let original = &problem.originals[0];
         let identified_set = &problem.identified_sets[0];
-        let conditional = compute_relative_magnitude_confidence_set_with_config(
+        let conditional = crate::inference::sensitivity::relative_magnitude::compute_relative_magnitude_confidence_set_with_config_counted(
             &problem.input,
             post_weights,
             problem.mbar,
             pointwise_inference,
-            pointwise_config,
+            pointwise_config, counter,
         )?;
         return Ok(RelativeMagnitudeMultiFlciResult {
             confidence_level: problem.inference.confidence_level,
@@ -543,6 +625,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_w
                         prepared_branches,
                         prepared_input_branches,
                         prepared_functional_branches,
+                        counter,
                     )?;
                 Ok(RelativeMagnitudeMultiFlciPoint {
                     post_weights: post_weights.clone(),

@@ -694,16 +694,38 @@ pub(super) fn dense_rows_to_csc(rows: &[Vec<f64>]) -> CscMatrix<f64> {
     build_clarabel_matrix(rows, &[])
 }
 
-/// Quantile of a standard normal truncated to `[l, u]`. An interval with no
-/// probability gives 0.
+/// Quantile of a standard normal truncated to `[l, u]`. A degenerate interval
+/// `l == u` gives that point, as `TruncatedNormal::norminvp` does in R. An
+/// interval with `l > u`, a `NaN` bound, a probability outside `[0, 1]` or an
+/// interval whose probability underflows is an error.
 pub(super) fn truncated_normal_quantile(p: f64, l: f64, u: f64) -> Result<f64, String> {
-    Ok(epistat_stats::normal::truncated_quantile(p, l, u).unwrap_or(0.0))
+    let undefined =
+        || format!("truncated normal quantile is undefined for p = {p}, interval [{l}, {u}]");
+    if p.is_nan() || l.is_nan() || u.is_nan() || !(0.0..=1.0).contains(&p) {
+        return Err(undefined());
+    }
+    if l == u {
+        return Ok(l);
+    }
+    epistat_stats::normal::truncated_quantile(p, l, u).ok_or_else(undefined)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{draw_standard_normal_vec_into_cached, draw_standard_normal_vec_into_scalar};
+    use super::{
+        draw_standard_normal_vec_into_cached, draw_standard_normal_vec_into_scalar,
+        truncated_normal_quantile,
+    };
     use epistat_rng::Stream;
+
+    #[test]
+    fn truncated_quantile_follows_norminvp_on_degenerate_and_empty_intervals() {
+        assert!((truncated_normal_quantile(0.5, -1.0, 1.0).expect("interval")).abs() < 1e-12);
+        assert_eq!(truncated_normal_quantile(0.9, 0.3, 0.3), Ok(0.3));
+        assert!(truncated_normal_quantile(0.9, 1.0, 0.0).is_err());
+        assert!(truncated_normal_quantile(0.9, f64::NAN, 1.0).is_err());
+        assert!(truncated_normal_quantile(1.5, 0.0, 1.0).is_err());
+    }
 
     fn mean_and_variance(sample: &[f64]) -> (f64, f64) {
         let n = crate::util::usize_to_f64(sample.len());
