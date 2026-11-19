@@ -1454,6 +1454,17 @@ fn honest_optimization_surface_pairwise_only_builds_expected_direction_count() {
 
 #[test]
 fn honest_optimization_surface_adaptive_matches_full_grid_when_forced_to_max_random() {
+    check_adaptive_surface_matches_full_grid(11);
+}
+
+#[test]
+fn honest_optimization_surface_adaptive_succeeds_for_every_small_seed() {
+    for seed in 0..16 {
+        check_adaptive_surface_matches_full_grid(seed);
+    }
+}
+
+fn check_adaptive_surface_matches_full_grid(random_seed: u64) {
     let input = HonestEventStudyInput {
         betahat: vec![0.0, 0.1, -0.1, 0.2, -0.2],
         covariance: vec![
@@ -1471,7 +1482,7 @@ fn honest_optimization_surface_adaptive_matches_full_grid_when_forced_to_max_ran
         include_basis: true,
         include_pairwise_contrasts: true,
         random_unit_directions: 40,
-        random_seed: 1,
+        random_seed,
     };
     let joint_config = HonestJointPathConfig {
         method: HonestJointPathMethod::Bonferroni,

@@ -223,6 +223,37 @@ fn variance_for_w(input: &HonestEventStudyInput, post_weights: &[f64], w: &[f64]
         .max(0.0)
 }
 
+/// Number of settings `socp_settings` offers: the solver's defaults, then a
+/// conservative set.
+const SOCP_SETTINGS_LADDER: usize = 2;
+
+/// Clarabel settings for the `attempt`-th try at one SOCP.
+///
+/// Attempt 0 is the solver's defaults, which every program that solves cleanly
+/// uses. Attempt 1 is for `NumericalError` and `InsufficientProgress`, which
+/// report the KKT factorisation losing accuracy on a feasible but thin cone,
+/// not infeasibility. It raises the static regularisation and the iteration
+/// budget and loosens the tolerances to `1e-6`.
+fn socp_settings(attempt: usize) -> Result<clarabel::solver::DefaultSettings<f64>, String> {
+    let mut builder = DefaultSettingsBuilder::<f64>::default();
+    builder
+        .verbose(false)
+        .presolve_enable(false)
+        .input_sparse_dropzeros(false);
+    if attempt > 0 {
+        builder
+            .static_regularization_constant(1e-6)
+            .dynamic_regularization_eps(1e-12)
+            .max_iter(1000)
+            .tol_gap_abs(1e-6)
+            .tol_gap_rel(1e-6)
+            .tol_feas(1e-6);
+    }
+    builder
+        .build()
+        .map_err(|err| format!("failed to build Clarabel settings: {err}"))
+}
+
 fn solve_socp(
     objective: &[f64],
     inequalities: &[Vec<f64>],
@@ -241,33 +272,38 @@ fn solve_socp(
         SupportedConeT::SecondOrderConeT(soc_rows.len()),
     ];
     let quadratic = CscMatrix::<f64>::zeros((objective.len(), objective.len()));
-    let settings = DefaultSettingsBuilder::<f64>::default()
-        .verbose(false)
-        .presolve_enable(false)
-        .input_sparse_dropzeros(false)
-        .build()
-        .map_err(|err| format!("failed to build Clarabel settings: {err}"))?;
-    let mut solver = DefaultSolver::new(
-        &quadratic,
-        objective,
-        &constraint_matrix,
-        rhs,
-        &cones,
-        settings,
-    )
-    .map_err(|err| format!("failed to initialize smoothness SOCP solver: {err}"))?;
-    solver.solve();
-    match solver.solution.status {
-        SolverStatus::Solved | SolverStatus::AlmostSolved => Ok(Some(SmoothnessSocpSolution {
-            solution: solver.solution.x,
-        })),
-        SolverStatus::PrimalInfeasible
-        | SolverStatus::DualInfeasible
-        | SolverStatus::AlmostPrimalInfeasible
-        | SolverStatus::AlmostDualInfeasible => Ok(None),
-        status => Err(format!(
-            "Clarabel failed to solve smoothness SOCP: {status:?}"
-        )),
+    let mut attempt = 0;
+    loop {
+        let settings = socp_settings(attempt)?;
+        let mut solver = DefaultSolver::new(
+            &quadratic,
+            objective,
+            &constraint_matrix,
+            rhs,
+            &cones,
+            settings,
+        )
+        .map_err(|err| format!("failed to initialize smoothness SOCP solver: {err}"))?;
+        solver.solve();
+        match solver.solution.status {
+            SolverStatus::Solved | SolverStatus::AlmostSolved => {
+                return Ok(Some(SmoothnessSocpSolution {
+                    solution: solver.solution.x,
+                }));
+            }
+            SolverStatus::PrimalInfeasible
+            | SolverStatus::DualInfeasible
+            | SolverStatus::AlmostPrimalInfeasible
+            | SolverStatus::AlmostDualInfeasible => return Ok(None),
+            status => {
+                attempt += 1;
+                if attempt >= SOCP_SETTINGS_LADDER {
+                    return Err(format!(
+                        "Clarabel failed to solve smoothness SOCP: {status:?}"
+                    ));
+                }
+            }
+        }
     }
 }
 
