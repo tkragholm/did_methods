@@ -46,6 +46,7 @@ hotpath = { version = "0.15.0", optional = true }
 once_map = "0.4.23"
 
 [dev-dependencies]
+epistat-testkit = { git = "https://github.com/tkragholm/epistat", rev = "95bf8e56c44037c58c0dea25418593fc1d78d470" }
 criterion = { version = "0.8.2", default-features = false }
 rand = "0.10.0"
 rand_distr = "0.6.0"

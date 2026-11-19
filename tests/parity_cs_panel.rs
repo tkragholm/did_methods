@@ -9,7 +9,7 @@
 
 #![allow(clippy::float_cmp)]
 
-use std::fs;
+use epistat_testkit::load_json;
 
 use did_methods::{
     AttGtConfig, AttGtDrConfig, AttGtDrObservation, BasePeriod, ComparisonGroup, DrDidConfig,
@@ -88,8 +88,7 @@ fn universal_config(comparison_group: ComparisonGroup) -> AttGtDrConfig {
 /// is then in `drdid_panel` rather than in the `ATT(g,t)` loop around it.
 #[test]
 fn drdid_panel_matches_r_on_one_lifted_cell() {
-    let raw = fs::read_to_string("tests/drdid_panel_cell_ref.json").expect("read cell fixture");
-    let fixture: DrDidCellRef = serde_json::from_str(&raw).expect("parse cell fixture");
+    let fixture: DrDidCellRef = load_json("tests/drdid_panel_cell_ref.json");
 
     let rows = (0..fixture.d.len())
         .map(|i| DrDidObservation {
@@ -125,9 +124,7 @@ fn drdid_panel_matches_r_on_one_lifted_cell() {
 /// The full grid, universal base period, never-treated comparison group.
 #[test]
 fn panel_att_gt_matches_r_universal_never_treated() {
-    let raw =
-        fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel fixture");
-    let fixture: CsPanelRef = serde_json::from_str(&raw).expect("parse panel fixture");
+    let fixture: CsPanelRef = load_json("tests/cs_panel_dr_universal_ref.json");
 
     let out = estimate_att_gt_dr_panel_with_influence(
         &observations(&fixture.data_subset),
@@ -238,11 +235,8 @@ fn panel_att_gt_matches_r_universal_never_treated() {
 /// comparator contamination.
 #[test]
 fn panel_att_gt_matches_r_universal_not_yet_treated() {
-    let raw = fs::read_to_string("tests/cs_panel_dr_notyet_ref.json").expect("read notyet fixture");
-    let fixture: CsPanelRef = serde_json::from_str(&raw).expect("parse notyet fixture");
-    let base =
-        fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel fixture");
-    let base_fixture: CsPanelRef = serde_json::from_str(&base).expect("parse panel fixture");
+    let fixture: CsPanelRef = load_json("tests/cs_panel_dr_notyet_ref.json");
+    let base_fixture: CsPanelRef = load_json("tests/cs_panel_dr_universal_ref.json");
 
     let out = estimate_att_gt_dr_panel_with_influence(
         &observations(&base_fixture.data_subset),
@@ -282,9 +276,7 @@ fn panel_att_gt_matches_r_universal_not_yet_treated() {
 /// repeated-cross-section answer under a panel name.
 #[test]
 fn panel_route_refuses_rows_without_unit_ids() {
-    let raw =
-        fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel fixture");
-    let fixture: CsPanelRef = serde_json::from_str(&raw).expect("parse panel fixture");
+    let fixture: CsPanelRef = load_json("tests/cs_panel_dr_universal_ref.json");
     let mut rows = observations(&fixture.data_subset);
     rows[17].unit_id = None;
 
@@ -332,9 +324,7 @@ fn universal_run() -> (
     did_methods::UnitPanel,
     Aggregations,
 ) {
-    let raw =
-        fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel fixture");
-    let fixture: CsPanelWithAgg = serde_json::from_str(&raw).expect("parse panel fixture");
+    let fixture: CsPanelWithAgg = load_json("tests/cs_panel_dr_universal_ref.json");
     let rows = observations(&fixture.data_subset);
     let out = estimate_att_gt_dr_panel_with_influence(
         &rows,
@@ -527,8 +517,7 @@ struct MbootRef {
 /// figures depend on.
 #[test]
 fn mboot_bands_agree_with_did_within_simulation_error() {
-    let raw = fs::read_to_string("tests/cs_panel_mboot_ref.json").expect("read mboot fixture");
-    let fixture: MbootRef = serde_json::from_str(&raw).expect("parse mboot fixture");
+    let fixture: MbootRef = load_json("tests/cs_panel_mboot_ref.json");
     let (estimates, influence, _panel, _) = universal_run();
 
     let bands = did_methods::att_gt_mboot_bands(
@@ -651,9 +640,7 @@ struct ClusteredRef {
 /// mpdta stands in for it with counties clustered into states.
 #[test]
 fn clustered_mboot_bands_agree_with_did() {
-    let raw = fs::read_to_string("tests/cs_panel_mboot_clustered_ref.json")
-        .expect("read clustered fixture");
-    let fixture: ClusteredRef = serde_json::from_str(&raw).expect("parse clustered fixture");
+    let fixture: ClusteredRef = load_json("tests/cs_panel_mboot_clustered_ref.json");
     let (estimates, influence, _panel, _) = universal_run();
 
     // `unit_order` is the sorted id list, which is exactly our unit index.
@@ -809,11 +796,8 @@ fn weights_flow_through_estimation_and_aggregation() {
         dynamic: AggRef,
     }
 
-    let raw = fs::read_to_string("tests/cs_panel_weighted_ref.json").expect("read weighted");
-    let fixture: WeightedRef = serde_json::from_str(&raw).expect("parse weighted");
-    let base =
-        fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel fixture");
-    let base_fixture: CsPanelWithAgg = serde_json::from_str(&base).expect("parse panel fixture");
+    let fixture: WeightedRef = load_json("tests/cs_panel_weighted_ref.json");
+    let base_fixture: CsPanelWithAgg = load_json("tests/cs_panel_dr_universal_ref.json");
 
     let by_unit = fixture
         .unit_order
@@ -898,10 +882,7 @@ fn clustered_per_cell_standard_errors_match_did() {
         cluster_of_unit: Vec<i64>,
     }
 
-    let raw = fs::read_to_string("tests/cs_panel_clustered_analytic_ref.json")
-        .expect("read analytic clustered fixture");
-    let fixture: AnalyticClusteredRef =
-        serde_json::from_str(&raw).expect("parse analytic clustered fixture");
+    let fixture: AnalyticClusteredRef = load_json("tests/cs_panel_clustered_analytic_ref.json");
     let (estimates, influence, panel, _) = universal_run();
     assert_eq!(fixture.unit_order.len(), influence[0].len());
 
@@ -988,8 +969,7 @@ fn aggte_dynamic_trimming_matches_r() {
         se_egt: Option<Vec<Option<f64>>>,
     }
 
-    let raw = fs::read_to_string("tests/cs_panel_trimmed_ref.json").expect("read trimmed");
-    let fixtures: Vec<TrimmedRef> = serde_json::from_str(&raw).expect("parse trimmed");
+    let fixtures: Vec<TrimmedRef> = load_json("tests/cs_panel_trimmed_ref.json");
     let (estimates, influence, panel, _) = universal_run();
     assert_eq!(fixtures.len(), 3);
 
@@ -1070,17 +1050,9 @@ fn rc_route_matches_the_traditional_estimator_and_aggregates() {
         dynamic: AggRef,
     }
 
-    let cells: Vec<RcCell> = serde_json::from_str(
-        &fs::read_to_string("tests/drdid_rc1_cells_ref.json").expect("read rc1"),
-    )
-    .expect("parse rc1");
-    let did_rc: RcRef =
-        serde_json::from_str(&fs::read_to_string("tests/cs_rc_ref.json").expect("read rc"))
-            .expect("parse rc");
-    let base: CsPanelWithAgg = serde_json::from_str(
-        &fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel"),
-    )
-    .expect("parse panel");
+    let cells: Vec<RcCell> = load_json("tests/drdid_rc1_cells_ref.json");
+    let did_rc: RcRef = load_json("tests/cs_rc_ref.json");
+    let base: CsPanelWithAgg = load_json("tests/cs_panel_dr_universal_ref.json");
 
     let rows = observations(&base.data_subset);
     assert_eq!(rows.len(), did_rc.n_rows);
@@ -1192,9 +1164,7 @@ fn rc_route_matches_the_traditional_estimator_and_aggregates() {
 /// vanishes. That is a wrong answer with no symptom, so it is refused.
 #[test]
 fn a_repeated_panel_row_is_refused() {
-    let raw =
-        fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel fixture");
-    let fixture: CsPanelWithAgg = serde_json::from_str(&raw).expect("parse panel fixture");
+    let fixture: CsPanelWithAgg = load_json("tests/cs_panel_dr_universal_ref.json");
     let mut rows = observations(&fixture.data_subset);
     rows.push(rows[0].clone());
 
@@ -1223,13 +1193,8 @@ fn efficient_rc_route_matches_did_panel_false() {
         dynamic: AggRef,
     }
 
-    let did_rc: RcRef =
-        serde_json::from_str(&fs::read_to_string("tests/cs_rc_ref.json").expect("read rc"))
-            .expect("parse rc");
-    let base: CsPanelWithAgg = serde_json::from_str(
-        &fs::read_to_string("tests/cs_panel_dr_universal_ref.json").expect("read panel"),
-    )
-    .expect("parse panel");
+    let did_rc: RcRef = load_json("tests/cs_rc_ref.json");
+    let base: CsPanelWithAgg = load_json("tests/cs_panel_dr_universal_ref.json");
     let rows = observations(&base.data_subset);
 
     // Ridge off, because R fits these regressions unregularised. The crate's

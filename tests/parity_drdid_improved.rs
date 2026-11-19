@@ -3,7 +3,7 @@
 //! propensity score by Sant'Anna and Zhao's calibration (`pscore.cal`).
 //! Fixtures from `tests/generate_drdid_improved_reference.R`.
 
-use std::fs;
+use epistat_testkit::load_json;
 
 use did_methods::{
     DrDidConfig, DrDidObservation, DrDidRepeatedObservation, estimate_drdid_improved_panel,
@@ -54,8 +54,7 @@ struct PanelCase {
 }
 
 fn fixture() -> Fixture {
-    let raw = fs::read_to_string("tests/drdid_improved_ref.json").expect("read improved fixture");
-    serde_json::from_str(&raw).expect("parse improved fixture")
+    load_json("tests/drdid_improved_ref.json")
 }
 
 fn worst(ours: &[f64], theirs: &[f64]) -> f64 {

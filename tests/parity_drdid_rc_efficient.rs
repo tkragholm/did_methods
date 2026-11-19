@@ -4,7 +4,7 @@
 
 #![allow(clippy::float_cmp)]
 
-use std::fs;
+use epistat_testkit::load_json;
 
 use did_methods::{DrDidConfig, DrDidRepeatedObservation, estimate_drdid_repeated_efficient};
 use serde::Deserialize;
@@ -40,9 +40,7 @@ fn rows(cell: &Cell) -> Vec<DrDidRepeatedObservation> {
 
 #[test]
 fn locally_efficient_rc_matches_drdid_rc() {
-    let raw =
-        fs::read_to_string("tests/drdid_rc_efficient_ref.json").expect("read efficient fixture");
-    let cells: Vec<Cell> = serde_json::from_str(&raw).expect("parse efficient fixture");
+    let cells: Vec<Cell> = load_json("tests/drdid_rc_efficient_ref.json");
     assert_eq!(cells.len(), 12);
 
     let mut worst_att = 0.0_f64;
@@ -80,9 +78,7 @@ fn locally_efficient_rc_matches_drdid_rc() {
 /// standard error, which is the whole reason both exist.
 #[test]
 fn the_two_rc_estimators_differ_only_in_precision() {
-    let raw =
-        fs::read_to_string("tests/drdid_rc_efficient_ref.json").expect("read efficient fixture");
-    let cells: Vec<Cell> = serde_json::from_str(&raw).expect("parse efficient fixture");
+    let cells: Vec<Cell> = load_json("tests/drdid_rc_efficient_ref.json");
 
     let mut differed = 0_usize;
     for cell in &cells {
