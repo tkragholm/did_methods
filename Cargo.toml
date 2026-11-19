@@ -26,7 +26,7 @@ clarabel = { version = "0.11.1", optional = true }
 # until it is on crates.io.
 epistat-inference = "0.1"
 epistat-linalg = "0.1"
-epistat-optim = { git = "https://github.com/tkragholm/epistat", rev = "9b49113fb7493846f033694c0034c74eb86c8938" }
+epistat-optim = { git = "https://github.com/tkragholm/epistat", rev = "b7595c47f7fad4f190e73d6c631e5ceeb2e6b134" }
 epistat-rng = "0.1"
 epistat-stats = "0.1"
 dyn-stack = "0.13.2"
