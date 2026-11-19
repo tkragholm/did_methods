@@ -64,6 +64,10 @@ required-features = ["honest"]
 name = "api_evolution_demo"
 required-features = ["honest"]
 
+[[example]]
+name = "surface_profile"
+required-features = ["honest"]
+
 [[test]]
 name = "dataset_validation"
 path = "tests/dataset_validation.rs"
