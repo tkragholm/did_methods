@@ -5,6 +5,12 @@ edition = "2024"
 authors = ["Tobias Kragholm"]
 license = "MIT OR Apache-2.0"
 description = "Reusable difference-in-differences primitives for event-study style analyses"
+rust-version = "1.88"
+repository = "https://github.com/tkragholm/did_methods"
+readme = "README.md"
+keywords = ["did", "causal-inference", "econometrics", "event-study", "statistics"]
+categories = ["science", "mathematics"]
+include = ["src/**/*.rs", "examples/**/*.rs", "README.md", "LICENSE-MIT", "LICENSE-APACHE", "Cargo.toml"]
 autotests = false
 
 [features]
