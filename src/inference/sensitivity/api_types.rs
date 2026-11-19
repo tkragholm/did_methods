@@ -142,6 +142,47 @@ pub enum HonestRelativeMagnitudeBound {
     LinearTrendDeviation,
 }
 
+/// Monte Carlo settings of the simulation behind a least-favorable critical
+/// value.
+///
+/// The defaults are the 1,000 draws and seed 0 that `HonestDiD` uses. More
+/// draws shrink the simulation error of the critical value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LeastFavorableSimulation {
+    /// Number of simulated draws.
+    pub draws: usize,
+    /// Seed of the simulation.
+    pub seed: u64,
+}
+
+impl Default for LeastFavorableSimulation {
+    fn default() -> Self {
+        Self {
+            draws: 1_000,
+            seed: 0,
+        }
+    }
+}
+
+impl LeastFavorableSimulation {
+    /// Settings with the given number of draws and seed.
+    #[must_use]
+    pub fn new(draws: usize, seed: u64) -> Self {
+        Self { draws, seed }
+    }
+
+    /// Check that the number of draws is positive.
+    ///
+    /// # Errors
+    /// Returns an error if `draws` is zero.
+    pub fn validate(self) -> Result<(), String> {
+        if self.draws == 0 {
+            return Err("least-favorable simulation draws must be positive".to_string());
+        }
+        Ok(())
+    }
+}
+
 /// Configuration for `DeltaSD` conditional confidence-set construction.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SmoothnessConfidenceSetConfig {

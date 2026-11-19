@@ -387,6 +387,147 @@ fn delta_sd_conditional_cs_least_favorable_is_nested_in_arp() {
 }
 
 #[test]
+fn delta_sd_least_favorable_simulation_size_is_honoured() {
+    let input = HonestEventStudyInput {
+        betahat: vec![0.0, 0.2, 1.0],
+        covariance: vec![
+            vec![0.25, 0.0, 0.0],
+            vec![0.0, 0.25, 0.0],
+            vec![0.0, 0.0, 0.5],
+        ],
+        pre_periods: vec![-2, -1],
+        post_periods: vec![0],
+    };
+    let inference = InferenceConfig::new(0.95);
+    let config = SmoothnessConfidenceSetConfig {
+        hybrid: SmoothnessHybrid::LeastFavorable,
+        grid_points: 20_000,
+        ..SmoothnessConfidenceSetConfig::from_inference(inference)
+    };
+    // A fine grid keeps the interval width continuous in the critical value.
+    let width = |simulation: LeastFavorableSimulation| {
+        let set = compute_smoothness_confidence_set_with_simulation(
+            &input,
+            &[1.0],
+            0.5,
+            inference,
+            config,
+            simulation,
+        )
+        .expect("lf conditional cs");
+        set.ub - set.lb
+    };
+    let default =
+        compute_smoothness_confidence_set_with_config(&input, &[1.0], 0.5, inference, config)
+            .expect("default lf conditional cs");
+    assert_eq!(
+        default.ub - default.lb,
+        width(LeastFavorableSimulation::default())
+    );
+
+    let draws: Vec<f64> = (0..10)
+        .map(|seed| width(LeastFavorableSimulation::new(1_000, seed)))
+        .collect();
+    let mean = draws.iter().sum::<f64>() / 10.0;
+    let sd = (draws.iter().map(|w| (w - mean).powi(2)).sum::<f64>() / 9.0).sqrt();
+    let large = width(LeastFavorableSimulation::new(50_000, 0));
+    assert!(
+        sd > 0.0,
+        "the simulation seed must reach the critical value"
+    );
+    assert_ne!(large, default.ub - default.lb);
+    epistat_testkit::assert_within_standard_errors(
+        default.ub - default.lb,
+        sd,
+        large,
+        sd / 50.0_f64.sqrt(),
+        4.0,
+    );
+}
+
+#[test]
+fn summaries_honour_the_least_favorable_simulation() {
+    let input = HonestEventStudyInput {
+        betahat: vec![0.0, 0.2, 1.0],
+        covariance: vec![
+            vec![0.25, 0.0, 0.0],
+            vec![0.0, 0.25, 0.0],
+            vec![0.0, 0.0, 0.5],
+        ],
+        pre_periods: vec![-2, -1],
+        post_periods: vec![0],
+    };
+    let inference = InferenceConfig::new(0.95);
+    let few = LeastFavorableSimulation::new(20, 7);
+    let m_values: Vec<f64> = (1..=10).map(|i| f64::from(i) * 0.1).collect();
+    let bounds = |summary: SensitivitySummary| -> Vec<(f64, f64)> {
+        summary.rows.iter().map(|row| (row.lb, row.ub)).collect()
+    };
+
+    let smoothness_default = summarize_smoothness_sensitivity(
+        &input,
+        inference,
+        &[1.0],
+        Some(SensitivitySummaryMethod::ConditionalLeastFavorable),
+        Some(&m_values),
+        None,
+        None,
+    )
+    .expect("default smoothness summary");
+    let smoothness_explicit = summarize_smoothness_sensitivity_with_simulation(
+        &input,
+        inference,
+        &[1.0],
+        Some(SensitivitySummaryMethod::ConditionalLeastFavorable),
+        Some(&m_values),
+        None,
+        None,
+        LeastFavorableSimulation::default(),
+    )
+    .expect("explicit default smoothness summary");
+    let smoothness_few = summarize_smoothness_sensitivity_with_simulation(
+        &input,
+        inference,
+        &[1.0],
+        Some(SensitivitySummaryMethod::ConditionalLeastFavorable),
+        Some(&m_values),
+        None,
+        None,
+        few,
+    )
+    .expect("smoothness summary with few draws");
+    let smoothness_default = bounds(smoothness_default);
+    assert_eq!(smoothness_default, bounds(smoothness_explicit));
+    assert_ne!(smoothness_default, bounds(smoothness_few));
+
+    let mbar_values = [0.5, 1.0, 1.5];
+    let rm_default = summarize_relative_magnitude_sensitivity(
+        &input,
+        inference,
+        &[1.0],
+        None,
+        Some(&mbar_values),
+        None,
+        None,
+        None,
+    )
+    .expect("default relative-magnitude summary");
+    let rm_few = summarize_relative_magnitude_sensitivity_with_simulation(
+        &input,
+        inference,
+        &[1.0],
+        None,
+        Some(&mbar_values),
+        None,
+        None,
+        None,
+        few,
+    )
+    .expect("relative-magnitude summary with few draws");
+    assert_ne!(bounds(rm_default), bounds(rm_few));
+}
+
+#[test]
 fn delta_sd_adaptive_grid_matches_full_grid_interval() {
     let input = HonestEventStudyInput {
         betahat: vec![0.0, 0.2, 1.0],
@@ -426,6 +567,7 @@ fn delta_sd_adaptive_grid_matches_full_grid_interval() {
         0.5,
         inference,
         config,
+        LeastFavorableSimulation::default(),
         &moments,
         &identified,
     )

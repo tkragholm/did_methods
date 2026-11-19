@@ -13,8 +13,8 @@ use super::solver_tally::SolverCounts;
 use super::{
     HonestBiasDirection, HonestConditionalConfidenceSet, HonestEventStudyInput,
     HonestIdentifiedSet, HonestMonotonicityDirection, HonestOriginalConfidenceSet,
-    HonestRelativeMagnitudeBound, RelativeMagnitudeConfidenceSetConfig, RelativeMagnitudeHybrid,
-    SmoothnessConfidenceSetConfig, SmoothnessHybrid,
+    HonestRelativeMagnitudeBound, LeastFavorableSimulation, RelativeMagnitudeConfidenceSetConfig,
+    RelativeMagnitudeHybrid, SmoothnessConfidenceSetConfig, SmoothnessHybrid,
 };
 use rayon::prelude::*;
 
@@ -315,6 +315,37 @@ pub fn summarize_smoothness_sensitivity(
         m_values,
         bias_direction,
         monotonicity_direction,
+        LeastFavorableSimulation::default(),
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+/// Same as [`summarize_smoothness_sensitivity`], with explicit least-favorable simulation settings.
+///
+/// # Errors
+/// Returns an error under the conditions of [`summarize_smoothness_sensitivity`], or if `simulation` is
+/// invalid.
+#[allow(clippy::too_many_arguments)]
+pub fn summarize_smoothness_sensitivity_with_simulation(
+    input: &HonestEventStudyInput,
+    inference: InferenceConfig,
+    post_weights: &[f64],
+    method: Option<SensitivitySummaryMethod>,
+    m_values: Option<&[f64]>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+    simulation: LeastFavorableSimulation,
+) -> Result<SensitivitySummary, String> {
+    simulation.validate()?;
+    summarize_smoothness_sensitivity_counted(
+        input,
+        inference,
+        post_weights,
+        method,
+        m_values,
+        bias_direction,
+        monotonicity_direction,
+        simulation,
         &crate::inference::sensitivity::SolverCounter::new(),
     )
 }
@@ -328,6 +359,7 @@ pub(in crate::inference::sensitivity) fn summarize_smoothness_sensitivity_counte
     m_values: Option<&[f64]>,
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
+    simulation: LeastFavorableSimulation,
     counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<SensitivitySummary, String> {
     validate_api_inputs(input, post_weights, inference)?;
@@ -384,7 +416,7 @@ pub(in crate::inference::sensitivity) fn summarize_smoothness_sensitivity_counte
                             post_weights,
                             m,
                             inference,
-                            config, counter,
+                            config, simulation, counter,
                         )?,
                         (Some(direction), None) => {
                             crate::inference::sensitivity::smoothness::compute_signed_smoothness_confidence_set_with_config_counted(
@@ -393,7 +425,7 @@ pub(in crate::inference::sensitivity) fn summarize_smoothness_sensitivity_counte
                                 m,
                                 direction,
                                 inference,
-                                config, counter,
+                                config, simulation, counter,
                             )?
                         }
                         (None, Some(direction)) => {
@@ -403,7 +435,7 @@ pub(in crate::inference::sensitivity) fn summarize_smoothness_sensitivity_counte
                                 m,
                                 direction,
                                 inference,
-                                config, counter,
+                                config, simulation, counter,
                             )?
                         }
                         (Some(_), Some(_)) => unreachable!("validated above"),
@@ -449,6 +481,39 @@ pub fn summarize_relative_magnitude_sensitivity(
         bound,
         bias_direction,
         monotonicity_direction,
+        LeastFavorableSimulation::default(),
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+/// Same as [`summarize_relative_magnitude_sensitivity`], with explicit least-favorable simulation settings.
+///
+/// # Errors
+/// Returns an error under the conditions of [`summarize_relative_magnitude_sensitivity`], or if `simulation` is
+/// invalid.
+#[allow(clippy::too_many_arguments)]
+pub fn summarize_relative_magnitude_sensitivity_with_simulation(
+    input: &HonestEventStudyInput,
+    inference: InferenceConfig,
+    post_weights: &[f64],
+    method: Option<SensitivitySummaryMethod>,
+    mbar_values: Option<&[f64]>,
+    bound: Option<HonestRelativeMagnitudeBound>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+    simulation: LeastFavorableSimulation,
+) -> Result<SensitivitySummary, String> {
+    simulation.validate()?;
+    summarize_relative_magnitude_sensitivity_counted(
+        input,
+        inference,
+        post_weights,
+        method,
+        mbar_values,
+        bound,
+        bias_direction,
+        monotonicity_direction,
+        simulation,
         &crate::inference::sensitivity::SolverCounter::new(),
     )
 }
@@ -463,6 +528,7 @@ pub(in crate::inference::sensitivity) fn summarize_relative_magnitude_sensitivit
     bound: Option<HonestRelativeMagnitudeBound>,
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
+    simulation: LeastFavorableSimulation,
     counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<SensitivitySummary, String> {
     let mut summaries = summarize_relative_magnitude_sensitivity_many_counted(
@@ -474,6 +540,7 @@ pub(in crate::inference::sensitivity) fn summarize_relative_magnitude_sensitivit
         bound,
         bias_direction,
         monotonicity_direction,
+        simulation,
         counter,
     )?;
     Ok(summaries.remove(0))
@@ -514,6 +581,39 @@ pub fn summarize_relative_magnitude_sensitivity_many(
         bound,
         bias_direction,
         monotonicity_direction,
+        LeastFavorableSimulation::default(),
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+/// Same as [`summarize_relative_magnitude_sensitivity_many`], with explicit least-favorable simulation settings.
+///
+/// # Errors
+/// Returns an error under the conditions of [`summarize_relative_magnitude_sensitivity_many`], or if `simulation` is
+/// invalid.
+#[allow(clippy::too_many_arguments)]
+pub fn summarize_relative_magnitude_sensitivity_many_with_simulation(
+    input: &HonestEventStudyInput,
+    inference: InferenceConfig,
+    functionals: &[&[f64]],
+    method: Option<SensitivitySummaryMethod>,
+    mbar_values: Option<&[f64]>,
+    bound: Option<HonestRelativeMagnitudeBound>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+    simulation: LeastFavorableSimulation,
+) -> Result<Vec<SensitivitySummary>, String> {
+    simulation.validate()?;
+    summarize_relative_magnitude_sensitivity_many_counted(
+        input,
+        inference,
+        functionals,
+        method,
+        mbar_values,
+        bound,
+        bias_direction,
+        monotonicity_direction,
+        simulation,
         &crate::inference::sensitivity::SolverCounter::new(),
     )
 }
@@ -528,6 +628,7 @@ pub(in crate::inference::sensitivity) fn summarize_relative_magnitude_sensitivit
     bound: Option<HonestRelativeMagnitudeBound>,
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
+    simulation: LeastFavorableSimulation,
     counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<Vec<SensitivitySummary>, String> {
     for post_weights in functionals {
@@ -563,6 +664,8 @@ pub(in crate::inference::sensitivity) fn summarize_relative_magnitude_sensitivit
                 unreachable!()
             }
         },
+        least_favorable_draws: simulation.draws,
+        least_favorable_seed: simulation.seed,
         ..RelativeMagnitudeConfidenceSetConfig::from_inference(inference)
     };
     config.validate(inference)?;
@@ -687,6 +790,41 @@ pub fn summarize_post_period_sensitivity(
         bound,
         bias_direction,
         monotonicity_direction,
+        LeastFavorableSimulation::default(),
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+/// Same as [`summarize_post_period_sensitivity`], with explicit least-favorable simulation settings.
+///
+/// # Errors
+/// Returns an error under the conditions of [`summarize_post_period_sensitivity`], or if `simulation` is
+/// invalid.
+#[allow(clippy::too_many_arguments)]
+pub fn summarize_post_period_sensitivity_with_simulation(
+    input: &HonestEventStudyInput,
+    post_period: i32,
+    sensitivity_type: SensitivityRestrictionKind,
+    inference: InferenceConfig,
+    method: Option<SensitivitySummaryMethod>,
+    sensitivity_values: Option<&[f64]>,
+    bound: Option<HonestRelativeMagnitudeBound>,
+    bias_direction: Option<HonestBiasDirection>,
+    monotonicity_direction: Option<HonestMonotonicityDirection>,
+    simulation: LeastFavorableSimulation,
+) -> Result<PostPeriodSensitivitySummary, String> {
+    simulation.validate()?;
+    summarize_post_period_sensitivity_counted(
+        input,
+        post_period,
+        sensitivity_type,
+        inference,
+        method,
+        sensitivity_values,
+        bound,
+        bias_direction,
+        monotonicity_direction,
+        simulation,
         &crate::inference::sensitivity::SolverCounter::new(),
     )
 }
@@ -702,6 +840,7 @@ pub(in crate::inference::sensitivity) fn summarize_post_period_sensitivity_count
     bound: Option<HonestRelativeMagnitudeBound>,
     bias_direction: Option<HonestBiasDirection>,
     monotonicity_direction: Option<HonestMonotonicityDirection>,
+    simulation: LeastFavorableSimulation,
     counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<PostPeriodSensitivitySummary, String> {
     input.validate()?;
@@ -725,6 +864,7 @@ pub(in crate::inference::sensitivity) fn summarize_post_period_sensitivity_count
             sensitivity_values,
             bias_direction,
             monotonicity_direction,
+            simulation,
             counter,
         )?,
         SensitivityRestrictionKind::RelativeMagnitude => {
@@ -737,6 +877,7 @@ pub(in crate::inference::sensitivity) fn summarize_post_period_sensitivity_count
                 bound,
                 bias_direction,
                 monotonicity_direction,
+                simulation,
                 counter,
             )?
         }

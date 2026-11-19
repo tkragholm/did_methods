@@ -47,8 +47,8 @@ use super::relative_magnitude::{
 };
 use super::{
     HonestBiasDirection, HonestConditionalConfidenceSet, HonestEventStudyInput,
-    HonestIdentifiedSet, HonestMonotonicityDirection, SmoothnessConfidenceSetConfig,
-    SmoothnessHybrid,
+    HonestIdentifiedSet, HonestMonotonicityDirection, LeastFavorableSimulation,
+    SmoothnessConfidenceSetConfig, SmoothnessHybrid,
 };
 use crate::types::InferenceConfig;
 
@@ -760,6 +760,7 @@ fn compute_honest_linear_sensitivity_conditional_cs(
     m: f64,
     inference: InferenceConfig,
     config: SmoothnessConfidenceSetConfig,
+    simulation: LeastFavorableSimulation,
     moments: &SmoothnessMomentSystem,
     identified: &HonestIdentifiedSet,
     counter: &crate::inference::sensitivity::SolverCounter,
@@ -788,9 +789,13 @@ fn compute_honest_linear_sensitivity_conditional_cs(
     let sd_arp = diag_sqrt(&sigma_arp);
     let w_t = build_w_t(&x_arp, &sd_arp);
     let lf_cv = match config.hybrid {
-        SmoothnessHybrid::LeastFavorable => {
-            compute_least_favorable_cv(&x_arp, &sigma_arp, config.hybrid_kappa, 1_000, 0)?
-        }
+        SmoothnessHybrid::LeastFavorable => compute_least_favorable_cv(
+            &x_arp,
+            &sigma_arp,
+            config.hybrid_kappa,
+            simulation.draws,
+            simulation.seed,
+        )?,
         SmoothnessHybrid::Flci | SmoothnessHybrid::ArpOnly => f64::INFINITY,
     };
     let (flci_hybrid, grid_lower, grid_upper) = match config.hybrid {
@@ -842,13 +847,14 @@ fn compute_honest_linear_sensitivity_conditional_cs(
 }
 
 #[cfg(test)]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub(in crate::inference::sensitivity) fn compute_honest_linear_sensitivity_conditional_cs_full_grid(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
     m: f64,
     inference: InferenceConfig,
     config: SmoothnessConfidenceSetConfig,
+    simulation: LeastFavorableSimulation,
     moments: &SmoothnessMomentSystem,
     identified: &HonestIdentifiedSet,
 ) -> Result<HonestConditionalConfidenceSet, String> {
@@ -876,9 +882,13 @@ pub(in crate::inference::sensitivity) fn compute_honest_linear_sensitivity_condi
     let sd_arp = diag_sqrt(&sigma_arp);
     let w_t = build_w_t(&x_arp, &sd_arp);
     let lf_cv = match config.hybrid {
-        SmoothnessHybrid::LeastFavorable => {
-            compute_least_favorable_cv(&x_arp, &sigma_arp, config.hybrid_kappa, 1_000, 0)?
-        }
+        SmoothnessHybrid::LeastFavorable => compute_least_favorable_cv(
+            &x_arp,
+            &sigma_arp,
+            config.hybrid_kappa,
+            simulation.draws,
+            simulation.seed,
+        )?,
         SmoothnessHybrid::Flci | SmoothnessHybrid::ArpOnly => f64::INFINITY,
     };
     let (flci_hybrid, grid_lower, grid_upper) = match config.hybrid {
@@ -1031,6 +1041,7 @@ pub(in crate::inference::sensitivity) fn compute_smoothness_confidence_set_count
         m,
         inference,
         SmoothnessConfidenceSetConfig::from_inference(inference),
+        LeastFavorableSimulation::default(),
         counter,
     )
 }
@@ -1054,6 +1065,33 @@ pub fn compute_smoothness_confidence_set_with_config(
         m,
         inference,
         config,
+        LeastFavorableSimulation::default(),
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+/// Compute a `ΔSD(M)` conditional confidence set with an explicit hybrid
+/// configuration and explicit least-favorable simulation settings.
+///
+/// # Errors
+/// Returns an error if the inputs or `simulation` are invalid, or the
+/// underlying conditional solve fails.
+pub fn compute_smoothness_confidence_set_with_simulation(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    inference: InferenceConfig,
+    config: SmoothnessConfidenceSetConfig,
+    simulation: LeastFavorableSimulation,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    simulation.validate()?;
+    compute_smoothness_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        m,
+        inference,
+        config,
+        simulation,
         &crate::inference::sensitivity::SolverCounter::new(),
     )
 }
@@ -1064,6 +1102,7 @@ pub(in crate::inference::sensitivity) fn compute_smoothness_confidence_set_with_
     m: f64,
     inference: InferenceConfig,
     config: SmoothnessConfidenceSetConfig,
+    simulation: LeastFavorableSimulation,
     counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     input.validate()?;
@@ -1108,6 +1147,7 @@ pub(in crate::inference::sensitivity) fn compute_smoothness_confidence_set_with_
         m,
         inference,
         config,
+        simulation,
         &moments,
         &identified,
         counter,
@@ -1215,6 +1255,7 @@ pub(in crate::inference::sensitivity) fn compute_signed_smoothness_confidence_se
         bias_direction,
         inference,
         SmoothnessConfidenceSetConfig::from_inference(inference),
+        LeastFavorableSimulation::default(),
         counter,
     )
 }
@@ -1240,10 +1281,40 @@ pub fn compute_signed_smoothness_confidence_set_with_config(
         bias_direction,
         inference,
         config,
+        LeastFavorableSimulation::default(),
         &crate::inference::sensitivity::SolverCounter::new(),
     )
 }
 
+/// Compute a sign-restricted `ΔSD(M)` conditional confidence set with an explicit hybrid
+/// configuration and explicit least-favorable simulation settings.
+///
+/// # Errors
+/// Returns an error if the inputs or `simulation` are invalid, or the
+/// underlying conditional solve fails.
+pub fn compute_signed_smoothness_confidence_set_with_simulation(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    bias_direction: HonestBiasDirection,
+    inference: InferenceConfig,
+    config: SmoothnessConfidenceSetConfig,
+    simulation: LeastFavorableSimulation,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    simulation.validate()?;
+    compute_signed_smoothness_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        m,
+        bias_direction,
+        inference,
+        config,
+        simulation,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(in crate::inference::sensitivity) fn compute_signed_smoothness_confidence_set_with_config_counted(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
@@ -1251,6 +1322,7 @@ pub(in crate::inference::sensitivity) fn compute_signed_smoothness_confidence_se
     bias_direction: HonestBiasDirection,
     inference: InferenceConfig,
     config: SmoothnessConfidenceSetConfig,
+    simulation: LeastFavorableSimulation,
     counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     input.validate()?;
@@ -1299,6 +1371,7 @@ pub(in crate::inference::sensitivity) fn compute_signed_smoothness_confidence_se
         m,
         inference,
         config,
+        simulation,
         &moments,
         &identified,
         counter,
@@ -1406,6 +1479,7 @@ pub(in crate::inference::sensitivity) fn compute_monotone_smoothness_confidence_
         monotonicity_direction,
         inference,
         SmoothnessConfidenceSetConfig::from_inference(inference),
+        LeastFavorableSimulation::default(),
         counter,
     )
 }
@@ -1431,10 +1505,40 @@ pub fn compute_monotone_smoothness_confidence_set_with_config(
         monotonicity_direction,
         inference,
         config,
+        LeastFavorableSimulation::default(),
         &crate::inference::sensitivity::SolverCounter::new(),
     )
 }
 
+/// Compute a monotone `ΔSD(M)` conditional confidence set with an explicit hybrid
+/// configuration and explicit least-favorable simulation settings.
+///
+/// # Errors
+/// Returns an error if the inputs or `simulation` are invalid, or the
+/// underlying conditional solve fails.
+pub fn compute_monotone_smoothness_confidence_set_with_simulation(
+    input: &HonestEventStudyInput,
+    post_weights: &[f64],
+    m: f64,
+    monotonicity_direction: HonestMonotonicityDirection,
+    inference: InferenceConfig,
+    config: SmoothnessConfidenceSetConfig,
+    simulation: LeastFavorableSimulation,
+) -> Result<HonestConditionalConfidenceSet, String> {
+    simulation.validate()?;
+    compute_monotone_smoothness_confidence_set_with_config_counted(
+        input,
+        post_weights,
+        m,
+        monotonicity_direction,
+        inference,
+        config,
+        simulation,
+        &crate::inference::sensitivity::SolverCounter::new(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(in crate::inference::sensitivity) fn compute_monotone_smoothness_confidence_set_with_config_counted(
     input: &HonestEventStudyInput,
     post_weights: &[f64],
@@ -1442,6 +1546,7 @@ pub(in crate::inference::sensitivity) fn compute_monotone_smoothness_confidence_
     monotonicity_direction: HonestMonotonicityDirection,
     inference: InferenceConfig,
     config: SmoothnessConfidenceSetConfig,
+    simulation: LeastFavorableSimulation,
     counter: &crate::inference::sensitivity::SolverCounter,
 ) -> Result<HonestConditionalConfidenceSet, String> {
     input.validate()?;
@@ -1490,6 +1595,7 @@ pub(in crate::inference::sensitivity) fn compute_monotone_smoothness_confidence_
         m,
         inference,
         config,
+        simulation,
         &moments,
         &identified,
         counter,

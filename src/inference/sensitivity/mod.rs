@@ -133,11 +133,14 @@ pub use smoothness::least_favorable_intervals::{
 pub use smoothness::{
     compute_monotone_smoothness_confidence_set,
     compute_monotone_smoothness_confidence_set_with_config,
+    compute_monotone_smoothness_confidence_set_with_simulation,
     compute_monotone_smoothness_identified_set, compute_signed_smoothness_confidence_set,
-    compute_signed_smoothness_confidence_set_with_config, compute_signed_smoothness_identified_set,
-    compute_smoothness_confidence_set, compute_smoothness_confidence_set_with_config,
-    compute_smoothness_identified_set, max_adjacent_pre_period_change,
-    pre_periods_satisfy_smoothness_bound,
+    compute_signed_smoothness_confidence_set_with_config,
+    compute_signed_smoothness_confidence_set_with_simulation,
+    compute_signed_smoothness_identified_set, compute_smoothness_confidence_set,
+    compute_smoothness_confidence_set_with_config,
+    compute_smoothness_confidence_set_with_simulation, compute_smoothness_identified_set,
+    max_adjacent_pre_period_change, pre_periods_satisfy_smoothness_bound,
 };
 pub(crate) use solver_tally::SolverCounter;
 pub use solver_tally::SolverCounts;
@@ -145,8 +148,11 @@ pub use summary_api::{
     PostPeriodSensitivitySummary, SensitivityRestrictionKind, SensitivitySummary,
     SensitivitySummaryMethod, SensitivitySummaryRow,
     estimate_smoothness_upper_bound_from_pretrends, summarize_post_period_sensitivity,
-    summarize_relative_magnitude_sensitivity, summarize_relative_magnitude_sensitivity_many,
-    summarize_smoothness_sensitivity,
+    summarize_post_period_sensitivity_with_simulation, summarize_relative_magnitude_sensitivity,
+    summarize_relative_magnitude_sensitivity_many,
+    summarize_relative_magnitude_sensitivity_many_with_simulation,
+    summarize_relative_magnitude_sensitivity_with_simulation, summarize_smoothness_sensitivity,
+    summarize_smoothness_sensitivity_with_simulation,
 };
 
 #[cfg(test)]

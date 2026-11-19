@@ -22,7 +22,7 @@ use super::smoothness::pre_periods_satisfy_smoothness_bound;
 use super::{
     HonestAssessment, HonestEventStudyInput, HonestEventStudyPoint, HonestJointPathConfig,
     HonestMultiFlciResult, HonestPostFunctional, HonestResult, HonestSensitivity,
-    RelativeMagnitudeConfidenceSetConfig, SmoothnessConfidenceSetConfig,
+    LeastFavorableSimulation, RelativeMagnitudeConfidenceSetConfig, SmoothnessConfidenceSetConfig,
     relative_magnitude::{
         compute_original_confidence_set,
         compute_relative_magnitude_confidence_set_with_precomputed_sets,
@@ -256,7 +256,7 @@ pub(in crate::inference::sensitivity) fn compute_honest_event_study_scalar_for_i
                         &post_weights,
                         m,
                         inference,
-                        SmoothnessConfidenceSetConfig::from_inference(inference), counter,
+                        SmoothnessConfidenceSetConfig::from_inference(inference), LeastFavorableSimulation::default(), counter,
                     )?;
                     HonestResult {
                         original_estimate: original.estimate,
@@ -427,7 +427,7 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_functional_wi
                     post_weights,
                     m,
                     inference,
-                    SmoothnessConfidenceSetConfig::from_inference(inference), counter,
+                    SmoothnessConfidenceSetConfig::from_inference(inference), LeastFavorableSimulation::default(), counter,
                 )?;
                 let identified_ci = (identified.lb, identified.ub);
                 let robust_ci = (conditional.lb, conditional.ub);
