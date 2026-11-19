@@ -38,6 +38,7 @@
 use faer::MatRef;
 
 use crate::types::DrDidError;
+use epistat_linalg::DesignError;
 
 /// The rows on which a design column has to be identified to be kept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,7 +123,7 @@ pub fn independent_design_columns(
         }
         DesignPruning::Pooled => vec![0; row_count],
     };
-    Ok(prune_design(design_flat, feature_count, &group, weights, tolerance).kept)
+    Ok(prune_design(design_flat, feature_count, &group, weights, tolerance)?.kept)
 }
 
 /// Prune `design_flat` (row-major, `feature_count` per row, column 0 the
@@ -136,22 +137,32 @@ pub(super) fn prune_design(
     group: &[usize],
     weights: &[f64],
     tolerance: f64,
-) -> PrunedDesign {
+) -> Result<PrunedDesign, DrDidError> {
     let row_count = group.len();
     if feature_count <= 1 || row_count == 0 {
-        return PrunedDesign {
+        return Ok(PrunedDesign {
             design_flat: design_flat.to_vec(),
             feature_count,
             dropped: 0,
             kept: vec![true; feature_count],
-        };
+        });
     }
     let kept_flags = epistat_linalg::design::independent_columns(
         MatRef::from_row_major_slice(design_flat, row_count, feature_count),
         weights,
         Some(group),
         tolerance,
-    );
+    )
+    .map_err(|error| match error {
+        DesignError::Weight { row } => DrDidError::InvalidWeight {
+            value: weights[row],
+        },
+        DesignError::Length { expected, got, .. } => DrDidError::InconsistentCovariateCount {
+            expected,
+            actual: got,
+        },
+        other => DrDidError::InvalidConfig(other.to_string()),
+    })?;
     let kept: Vec<usize> = (0..feature_count).filter(|&c| kept_flags[c]).collect();
 
     let dropped = feature_count - kept.len();
@@ -160,24 +171,24 @@ pub(super) fn prune_design(
         kept_flags[k] = true;
     }
     if dropped == 0 {
-        return PrunedDesign {
+        return Ok(PrunedDesign {
             design_flat: design_flat.to_vec(),
             feature_count,
             dropped: 0,
             kept: kept_flags,
-        };
+        });
     }
     let mut pruned = Vec::with_capacity(row_count * kept.len());
     for row in 0..row_count {
         let x = &design_flat[row * feature_count..(row + 1) * feature_count];
         pruned.extend(kept.iter().map(|&k| x[k]));
     }
-    PrunedDesign {
+    Ok(PrunedDesign {
         design_flat: pruned,
         feature_count: kept.len(),
         dropped,
         kept: kept_flags,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -200,7 +211,8 @@ mod tests {
             &[1.0, 0.1, 1.0],
         ]);
         let group = [0, 0, 0, 1, 1, 1];
-        let out = prune_design(&flat, k, &group, &[1.0; 6], DEPENDENCE_TOLERANCE);
+        let out =
+            prune_design(&flat, k, &group, &[1.0; 6], DEPENDENCE_TOLERANCE).expect("valid weights");
         assert_eq!(out.dropped, 0);
         assert_eq!(out.feature_count, 3);
         assert_eq!(out.design_flat, flat);
@@ -217,7 +229,8 @@ mod tests {
             &[1.0, 2.0, 0.0],
         ]);
         let group = [0, 0, 1, 1];
-        let out = prune_design(&flat, k, &group, &[1.0; 4], DEPENDENCE_TOLERANCE);
+        let out =
+            prune_design(&flat, k, &group, &[1.0; 4], DEPENDENCE_TOLERANCE).expect("valid weights");
         assert_eq!(out.dropped, 1);
         assert_eq!(out.feature_count, 2);
         assert_eq!(
@@ -245,7 +258,8 @@ mod tests {
             &group,
             &[1.0, 2.0, 1.0, 1.0, 1.0, 3.0],
             DEPENDENCE_TOLERANCE,
-        );
+        )
+        .expect("valid weights");
         assert_eq!(out.dropped, 1);
         assert_eq!(out.feature_count, 3);
         assert_eq!(&out.design_flat[..3], &[1.0, 1.0, 0.0]);
@@ -305,7 +319,8 @@ mod tests {
         )
         .unwrap();
         let groups: Vec<usize> = treated.iter().map(|&t| usize::from(t)).collect();
-        let pruned = prune_design(&flat, k, &groups, &weights, DEPENDENCE_TOLERANCE);
+        let pruned =
+            prune_design(&flat, k, &groups, &weights, DEPENDENCE_TOLERANCE).expect("valid weights");
         assert_eq!(mask, pruned.kept);
         assert_eq!(mask, vec![true, true, true, false, false]);
     }
@@ -357,7 +372,8 @@ mod tests {
     #[test]
     fn an_all_zero_column_is_dropped_and_the_intercept_never_is() {
         let (flat, k) = design(&[&[1.0, 0.0], &[1.0, 0.0], &[1.0, 0.0]]);
-        let out = prune_design(&flat, k, &[0, 0, 1], &[1.0; 3], DEPENDENCE_TOLERANCE);
+        let out = prune_design(&flat, k, &[0, 0, 1], &[1.0; 3], DEPENDENCE_TOLERANCE)
+            .expect("valid weights");
         assert_eq!(out.dropped, 1);
         assert_eq!(out.feature_count, 1);
         assert_eq!(out.design_flat, vec![1.0; 3]);

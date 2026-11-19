@@ -334,7 +334,7 @@ fn prepare_panel_flat(input: PanelFlatInput<'_>) -> Result<PanelPreparedData, Dr
         &arms(&treated_indicator),
         input.weight,
         DEPENDENCE_TOLERANCE,
-    );
+    )?;
     Ok(PanelPreparedData {
         feature_count: design.feature_count,
         treated_n,
@@ -455,7 +455,7 @@ fn prepare_panel_data(observations: &[DrDidObservation]) -> Result<PanelPrepared
         &arms(&treated_indicator),
         &sampling_weights,
         DEPENDENCE_TOLERANCE,
-    );
+    )?;
     Ok(PanelPreparedData {
         feature_count: design.feature_count,
         treated_n,

@@ -76,7 +76,7 @@ pub fn estimate_drdid_improved_panel(
     }
 
     let arms: Vec<usize> = treated.iter().map(|&t| usize::from(t > 0.5)).collect();
-    let pruned = prune_design(&design, features, &arms, &sampling, DEPENDENCE_TOLERANCE);
+    let pruned = prune_design(&design, features, &arms, &sampling, DEPENDENCE_TOLERANCE)?;
     let p = pruned.feature_count;
     let design = pruned.design_flat;
 

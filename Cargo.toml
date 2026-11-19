@@ -29,11 +29,11 @@ hotpath-alloc = ["hotpath", "hotpath/hotpath-alloc"]
 bon = "3"
 clarabel = { version = "0.11.1", optional = true }
 # Shared numerical crates, all from one epistat commit.
-epistat-inference = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1" }
-epistat-linalg = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1" }
-epistat-optim = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1" }
-epistat-rng = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1", features = ["rand"] }
-epistat-stats = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1" }
+epistat-inference = { git = "https://github.com/tkragholm/epistat", rev = "3ef48dd7ed88588ea4c64ca560f5c7d08de89b57" }
+epistat-linalg = { git = "https://github.com/tkragholm/epistat", rev = "3ef48dd7ed88588ea4c64ca560f5c7d08de89b57" }
+epistat-optim = { git = "https://github.com/tkragholm/epistat", rev = "3ef48dd7ed88588ea4c64ca560f5c7d08de89b57" }
+epistat-rng = { git = "https://github.com/tkragholm/epistat", rev = "3ef48dd7ed88588ea4c64ca560f5c7d08de89b57", features = ["rand"] }
+epistat-stats = { git = "https://github.com/tkragholm/epistat", rev = "3ef48dd7ed88588ea4c64ca560f5c7d08de89b57" }
 dyn-stack = "0.13.2"
 faer = { version = "0.24.0", features = ["nightly", "perf-warn"] }
 itertools = "0.14"

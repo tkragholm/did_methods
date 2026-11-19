@@ -147,7 +147,8 @@ fn clustered_covariance_from_clusters(
         .collect::<Vec<_>>();
     let k = columns.len();
     let flat = epistat_inference::influence::clustered_covariance(&columns, clusters)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "clustered covariance needs at least two clusters".to_string())?;
     Ok(flat.chunks(k).map(<[f64]>::to_vec).collect())
 }
 

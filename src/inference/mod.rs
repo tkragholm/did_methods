@@ -55,6 +55,8 @@ pub enum InferenceError {
     },
     #[error("clustered variance is not finite")]
     NonFiniteClusteredVariance,
+    #[error("clustered variance needs at least two clusters")]
+    TooFewClusters,
     #[error("invalid confidence level for clustered CI: {0}")]
     InvalidConfidenceLevel(f64),
 }
@@ -104,7 +106,8 @@ pub fn clustered_variance_from_index(
     cluster_index: &ClusterIndex,
 ) -> Result<f64, InferenceError> {
     epistat_inference::influence::clustered_variance(influence_function, &cluster_index.clusters())
-        .map_err(|error| map_influence_error(&error))
+        .map_err(|error| map_influence_error(&error))?
+        .ok_or(InferenceError::TooFewClusters)
 }
 
 /// Computes the clustered standard error from influence function values using a pre-computed index.
@@ -157,7 +160,8 @@ pub fn clustered_variance_from_influence<L: Eq + Hash>(
         influence_function,
         &Clusters::from_labels(cluster_labels),
     )
-    .map_err(|error| map_influence_error(&error))
+    .map_err(|error| map_influence_error(&error))?
+    .ok_or(InferenceError::TooFewClusters)
 }
 
 /// Computes the clustered standard error from influence function values.

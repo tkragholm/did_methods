@@ -219,7 +219,7 @@ pub(super) fn prepare(
         &cells,
         &sampling_weights,
         DEPENDENCE_TOLERANCE,
-    );
+    )?;
     Ok(RepeatedPreparedData {
         feature_count: design.feature_count,
         treated_n,

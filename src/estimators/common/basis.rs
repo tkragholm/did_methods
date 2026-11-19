@@ -86,18 +86,21 @@ impl BSplineBasis {
     /// * `internal_knots` - Sorted list of internal knot positions.
     /// * `boundary_knots` - (min, max) boundary knots.
     ///
-    /// # Panics
-    /// If the internal knots are not sorted or do not lie strictly inside the
-    /// boundary knots.
-    #[must_use]
-    pub fn new(degree: usize, internal_knots: Vec<f64>, boundary_knots: (f64, f64)) -> Self {
-        let spline = BSpline::new(degree, &internal_knots, boundary_knots.0, boundary_knots.1);
-        Self {
+    /// # Errors
+    /// If the boundary knots are not finite and increasing, or the internal
+    /// knots are not sorted or do not lie strictly inside the boundary.
+    pub fn new(
+        degree: usize,
+        internal_knots: Vec<f64>,
+        boundary_knots: (f64, f64),
+    ) -> Result<Self, epistat_linalg::basis::KnotError> {
+        let spline = BSpline::new(degree, &internal_knots, boundary_knots.0, boundary_knots.1)?;
+        Ok(Self {
             degree,
             internal_knots,
             boundary_knots,
             spline,
-        }
+        })
     }
 }
 
@@ -131,7 +134,7 @@ mod tests {
     #[test]
     fn bspline_basis_eval_sums_to_one() {
         // B-splines partition of unity property
-        let basis = BSplineBasis::new(3, vec![0.5], (0.0, 1.0));
+        let basis = BSplineBasis::new(3, vec![0.5], (0.0, 1.0)).expect("valid knots");
         for x in [0.1, 0.3, 0.5, 0.7, 0.9] {
             let vals = basis.eval(x);
             let sum: f64 = (0..vals.nrows()).map(|i| vals[i]).sum();
