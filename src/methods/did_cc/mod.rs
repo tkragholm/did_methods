@@ -8,11 +8,11 @@
 //! treated weighting rule. A Hausman-style comparison test reports whether the
 //! stationarity restriction materially shifts the ATT target.
 
+use epistat_stats::gamma::chi_square_sf;
 use faer::{Mat, MatRef};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use statrs::distribution::{ChiSquared, ContinuousCDF};
 
 use crate::estimators::outcome::nonparametric::{LocalLinearOutcome, LocalLinearScratch};
 use crate::estimators::propensity::logistic::LogisticPS;
@@ -210,8 +210,7 @@ pub fn test_did_cc_stationarity_from_views<T: DidCcObservationView>(
         return Err(DidCcError::DegenerateHausmanVariance);
     }
     let statistic = (difference / difference_se).powi(2);
-    let chi2 = ChiSquared::new(1.0).map_err(|err| DidCcError::InvalidConfig(err.to_string()))?;
-    let p_value = 1.0 - chi2.cdf(statistic);
+    let p_value = chi_square_sf(statistic, 1.0);
 
     Ok(DidCcHausmanTest {
         robust,

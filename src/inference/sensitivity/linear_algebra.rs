@@ -1,5 +1,6 @@
 use clarabel::algebra::CscMatrix;
 use dyn_stack::{MemBuffer, MemStack};
+use epistat_stats::normal;
 use faer::linalg::cholesky::llt;
 use faer::linalg::cholesky::llt::factor::LltRegularization;
 use faer::linalg::matmul::matmul;
@@ -7,7 +8,6 @@ use faer::prelude::Solve;
 use faer::{Accum, Mat, MatMut, MatRef, Par, Side, Spec};
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
-use statrs::distribution::{ContinuousCDF, Normal};
 
 use crate::util::usize_to_f64;
 
@@ -193,17 +193,11 @@ pub(super) fn simulation_rank(sample_count: usize, confidence_level: f64) -> usi
 }
 
 pub(super) fn pointwise_confidence_level_from_critical(critical: f64) -> Result<f64, String> {
-    let normal = Normal::new(0.0, 1.0)
-        .map_err(|err| format!("failed to create normal distribution: {err}"))?;
-    Ok(2.0f64
-        .mul_add(normal.cdf(critical), -1.0)
-        .clamp(1e-12, 1.0 - 1e-12))
+    Ok((2.0 * normal::cdf(critical) - 1.0).clamp(1e-12, 1.0 - 1e-12))
 }
 
 pub(super) fn critical_value_from_pointwise_confidence(pointwise: f64) -> Result<f64, String> {
-    let normal = Normal::new(0.0, 1.0)
-        .map_err(|err| format!("failed to create normal distribution: {err}"))?;
-    Ok(normal.inverse_cdf((1.0 + pointwise) * 0.5))
+    Ok(normal::quantile((1.0 + pointwise) * 0.5))
 }
 
 const SENSITIVITY_BATCHED_CHUNK_SIZE: usize = 64;

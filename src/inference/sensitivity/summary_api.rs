@@ -1,4 +1,4 @@
-use statrs::distribution::{ContinuousCDF, Normal};
+use epistat_stats::normal;
 
 use super::linear_algebra::{diag_sqrt, linear_grid, mat_vec_mul_into, sandwich_covariance};
 use super::relative_magnitude::{
@@ -173,9 +173,7 @@ pub fn estimate_smoothness_upper_bound_from_pretrends(
     mat_vec_mul_into(&constraint_matrix, pre_coef, &mut diffs);
     let sigma_diffs = sandwich_covariance(&constraint_matrix, &pre_sigma);
     let se_diffs = diag_sqrt(&sigma_diffs);
-    let normal = Normal::new(0.0, 1.0)
-        .map_err(|err| format!("failed to create normal distribution: {err}"))?;
-    let z = normal.inverse_cdf(1.0 - alpha);
+    let z = normal::quantile(1.0 - alpha);
     Ok(diffs
         .iter()
         .zip(se_diffs.iter())

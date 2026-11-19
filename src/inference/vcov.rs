@@ -1,10 +1,8 @@
 use epistat_inference::Clusters;
 use faer::linalg::matmul::matmul;
 use faer::{Accum, Mat, MatRef, Par};
-use statrs::distribution::{ChiSquared, ContinuousCDF};
 use std::hash::Hash;
 
-use crate::estimators::common::linalg::solve_dense_system;
 use crate::util::usize_to_f64;
 
 const VCOV_BLOCK_SIZE: usize = 32;
@@ -192,24 +190,13 @@ pub fn joint_wald_test(
     if k == 0 {
         return Err("Wald test requires at least one estimate".to_string());
     }
-
-    // Flatten covariance matrix for solve_dense_system
-    let mut sigma_flat = Vec::with_capacity(k * k);
-    for row in covariance_matrix {
-        sigma_flat.extend_from_slice(row);
+    if covariance_matrix.len() != k || covariance_matrix.iter().any(|row| row.len() != k) {
+        return Err("covariance matrix shape does not match the estimates".to_string());
     }
-
-    let x = solve_dense_system(&sigma_flat, estimates)?;
-
-    let mut statistic = 0.0;
-    for i in 0..k {
-        statistic = estimates[i].mul_add(x[i], statistic);
-    }
-
-    let chi2 = ChiSquared::new(usize_to_f64(k)).map_err(|e| e.to_string())?;
-    let p_value = 1.0 - chi2.cdf(statistic);
-
-    Ok((statistic, p_value, k))
+    let covariance = Mat::from_fn(k, k, |i, j| covariance_matrix[i][j]);
+    let test = epistat_inference::wald::wald(estimates, covariance.as_ref())
+        .map_err(|err| err.to_string())?;
+    Ok((test.statistic, test.p_value, test.df))
 }
 
 #[cfg(test)]
