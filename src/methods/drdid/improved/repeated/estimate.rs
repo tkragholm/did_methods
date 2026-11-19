@@ -42,8 +42,9 @@ pub(super) fn estimate_improved_repeated_att(
     let out_y_cont = nuisance.post_indicator_mix(&prepared.post_indicator);
 
     let weighted_terms = collect_weighted_terms(prepared, nuisance, &out_y_cont, n);
-    let means = WeightedMeans::from_terms(&weighted_terms);
-    let normalized = normalize_weighted_terms(weighted_terms, &means);
+    let weight_means = WeightedMeans::from_terms(&weighted_terms);
+    let normalized = normalize_weighted_terms(weighted_terms, &weight_means);
+    let means = WeightedMeans::from_terms(&normalized);
     let att = means.att();
     let influence_function = build_influence_function(&normalized, &means, n);
 

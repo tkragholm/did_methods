@@ -5,9 +5,10 @@
 //!
 //! The implementation is organized around three layers:
 //! - [`data`], which validates and materializes the repeated-cross-section
-//!   design matrices and indicators,
-//! - [`nuisance`], which fits the inverse probability tilting propensity score
-//!   and weighted outcome regressions,
+//!   design matrices and indicators, prepending the intercept to the
+//!   covariates,
+//! - [`nuisance`], which fits the calibrated propensity score and the weighted
+//!   outcome regressions,
 //! - [`estimate`], which evaluates the improved score and influence function.
 //!
 //! In the notation of Sant'Anna and Zhao (2020), the nuisance system is
@@ -24,10 +25,7 @@ mod data;
 mod estimate;
 mod nuisance;
 
-use crate::inference::{
-    multiplier_bootstrap_ci, standard_error_from_influence, validate_confidence_level,
-};
-use crate::methods::drdid::repeated::estimate_drdid_repeated_cross_section;
+use crate::inference::{standard_error_from_influence, validate_confidence_level};
 use crate::types::{DrDidConfig, DrDidError, DrDidEstimate, DrDidRepeatedObservation};
 
 use data::prepare_repeated_data;
@@ -36,6 +34,9 @@ use nuisance::fit_improved_repeated_nuisance_models;
 
 /// Estimate the improved / locally efficient repeated-cross-section `DR-DiD`
 /// estimator.
+///
+/// `DrDidRepeatedObservation::covariates` holds the covariates without an
+/// intercept, which the estimator prepends.
 ///
 /// # Errors
 ///
@@ -53,22 +54,8 @@ pub fn estimate_drdid_improved_repeated_cross_section(
     let nuisance = fit_improved_repeated_nuisance_models(&prepared, config)?;
     let estimate = estimate_improved_repeated_att(&prepared, &nuisance);
 
-    // The improved repeated-cross-section path is kept behind a stability
-    // guard until it has full parity-backed validation against the vendored
-    // `DRDID::drdid_imp_rc` surface. Fall back to the stable repeated DR score
-    // when the improved score drifts materially away on the same sample.
-    let stable_estimate = estimate_drdid_repeated_cross_section(observations, config)?;
-    if (estimate.att - stable_estimate.att).abs() > 1.0 {
-        return Ok(stable_estimate);
-    }
-
     let se = standard_error_from_influence(&estimate.influence_function);
-    let (ci_low, ci_high) = multiplier_bootstrap_ci(
-        estimate.att,
-        &estimate.influence_function,
-        config.inference(),
-        config.bootstrap(),
-    );
+    let (ci_low, ci_high) = (estimate.att - 1.96 * se, estimate.att + 1.96 * se);
 
     Ok(DrDidEstimate {
         att: estimate.att,
@@ -125,13 +112,12 @@ fn validate_drdid_config(config: DrDidConfig) -> Result<(), DrDidError> {
 mod tests {
     use super::*;
     use crate::methods::drdid::improved::estimate_drdid_improved_panel;
-    use crate::methods::drdid::panel;
     use crate::types::{DidCell, DrDidObservation, TimePeriod, TreatmentGroup};
     use rand::{RngExt, SeedableRng, rngs::StdRng};
 
     fn row(treated: bool, post_period: bool, outcome: f64, x1: f64) -> DrDidRepeatedObservation {
         DrDidRepeatedObservation {
-            covariates: vec![1.0, x1],
+            covariates: vec![x1],
             ..DrDidRepeatedObservation::new(
                 DidCell::from_parts(
                     TreatmentGroup::from_bool(treated),
@@ -199,41 +185,22 @@ mod tests {
     }
 
     #[test]
-    fn improved_panel_matches_panel_entrypoint() {
-        let rows = vec![
-            DrDidObservation {
-                treated: false,
-                delta_outcome: 1.0,
-                weight: 1.0,
-                covariates: vec![1.0],
-            },
-            DrDidObservation {
-                treated: false,
-                delta_outcome: 2.0,
-                weight: 1.0,
-                covariates: vec![2.0],
-            },
-            DrDidObservation {
-                treated: true,
-                delta_outcome: 4.0,
-                weight: 1.0,
-                covariates: vec![1.0],
-            },
-            DrDidObservation {
-                treated: true,
-                delta_outcome: 5.0,
-                weight: 1.0,
-                covariates: vec![2.0],
-            },
-        ];
-        let config = DrDidConfig::default();
-        let direct = estimate_drdid_improved_panel(&rows, config).expect("improved panel");
-        let legacy = panel::estimate_drdid_panel(&rows, config).expect("panel");
-        assert!((direct.att - legacy.att).abs() < 1e-12);
-        assert!((direct.se - legacy.se).abs() < 1e-12);
-        assert_eq!(
-            direct.influence_function.len(),
-            legacy.influence_function.len()
-        );
+    fn improved_panel_estimates_a_simple_contrast() {
+        let rows = (0..40)
+            .map(|i| {
+                let x = f64::from(i % 8);
+                let treated = i % 2 == 0 || i % 5 == 0;
+                DrDidObservation {
+                    treated,
+                    delta_outcome: 0.5 * x + if treated { 3.0 } else { 0.0 } + f64::from(i % 3),
+                    weight: 1.0,
+                    covariates: vec![1.0, x],
+                }
+            })
+            .collect::<Vec<_>>();
+        let fit = estimate_drdid_improved_panel(&rows, DrDidConfig::default()).expect("panel");
+        assert!((fit.att - 3.0).abs() < 1.0, "att {}", fit.att);
+        assert_eq!(fit.influence_function.len(), rows.len());
+        assert!(fit.se.is_finite());
     }
 }

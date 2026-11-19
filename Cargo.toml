@@ -77,3 +77,8 @@ required-features = ["parity-tests"]
 name = "parity_drdid_rc_efficient"
 path = "tests/parity_drdid_rc_efficient.rs"
 required-features = ["parity-tests"]
+
+[[test]]
+name = "parity_drdid_improved"
+path = "tests/parity_drdid_improved.rs"
+required-features = ["parity-tests"]

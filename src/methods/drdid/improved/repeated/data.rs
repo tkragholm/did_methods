@@ -17,7 +17,7 @@ pub(super) fn prepare_repeated_data(
     observations: &[DrDidRepeatedObservation],
 ) -> Result<RepeatedPreparedData, DrDidError> {
     let covariate_count = observations.first().map_or(0, |row| row.covariates.len());
-    let feature_count = covariate_count.max(1);
+    let feature_count = covariate_count + 1;
     let observation_count = observations.len();
 
     let mut treated_n = 0_usize;
@@ -75,11 +75,8 @@ pub(super) fn prepare_repeated_data(
         outcome.push(row.outcome);
         total_weight += row.weight;
         sampling_weights.push(row.weight);
-        if covariate_count == 0 {
-            design_matrix_flat.push(1.0);
-        } else {
-            design_matrix_flat.extend_from_slice(&row.covariates);
-        }
+        design_matrix_flat.push(1.0);
+        design_matrix_flat.extend_from_slice(&row.covariates);
     }
 
     if treated_n == 0 {
