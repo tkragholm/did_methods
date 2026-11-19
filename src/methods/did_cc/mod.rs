@@ -8,11 +8,9 @@
 //! treated weighting rule. A Hausman-style comparison test reports whether the
 //! stationarity restriction materially shifts the ATT target.
 
+use epistat_rng::Stream;
 use epistat_stats::gamma::chi_square_sf;
 use faer::{Mat, MatRef};
-use rand::SeedableRng;
-use rand::rngs::StdRng;
-use rand::seq::SliceRandom;
 
 use crate::estimators::outcome::nonparametric::{LocalLinearOutcome, LocalLinearScratch};
 use crate::estimators::propensity::logistic::LogisticPS;
@@ -491,7 +489,7 @@ fn assign_cross_fit_folds(
     seed: u64,
 ) -> Result<Vec<usize>, DidCcError> {
     let mut assignment = vec![0; prepared.outcomes.len()];
-    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rng = Stream::seeded(seed);
     for (treated_cell, post_cell) in [(true, true), (true, false), (false, true), (false, false)] {
         let mut indices = prepared
             .treated
@@ -511,7 +509,7 @@ fn assign_cross_fit_folds(
                 ),
             });
         }
-        indices.shuffle(&mut rng);
+        rng.shuffle(&mut indices);
         for (position, idx) in indices.into_iter().enumerate() {
             assignment[idx] = position % folds;
         }
@@ -1033,8 +1031,7 @@ fn matches_cell(treated: f64, post_period: f64, treated_cell: bool, post_cell: b
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
+    use epistat_rng::Stream;
     use rand_distr::{Bernoulli, Distribution, Normal};
 
     fn row(treated: bool, post_period: bool, outcome: f64, x: f64) -> DrDidRepeatedObservation {
@@ -1198,7 +1195,7 @@ mod tests {
     }
 
     fn simulate_did_cc_sample(
-        rng: &mut StdRng,
+        rng: &mut Stream,
         observations_per_cell: usize,
         composition_shift: bool,
     ) -> Vec<DrDidRepeatedObservation> {
@@ -1247,7 +1244,7 @@ mod tests {
     fn did_cc_cross_fit_simulation_recovers_constant_effect() {
         let true_att = 1.5;
         let draws = 8;
-        let mut rng = StdRng::seed_from_u64(24_0310);
+        let mut rng = Stream::seeded(24_0310);
         let mut estimates = Vec::with_capacity(draws);
 
         for draw in 0..draws {
@@ -1294,7 +1291,7 @@ mod tests {
     fn did_cc_robust_outperforms_stationary_under_composition_shift_simulation() {
         let target_att = 1.75;
         let draws = 8;
-        let mut rng = StdRng::seed_from_u64(24_0311);
+        let mut rng = Stream::seeded(24_0311);
         let mut robust_abs_error = 0.0;
         let mut stationary_abs_error = 0.0;
         let mut hausman_rejections = 0usize;
@@ -1337,7 +1334,7 @@ mod tests {
 
     #[test]
     fn did_cc_can_skip_bootstrap_confidence_intervals() {
-        let rows = simulate_did_cc_sample(&mut StdRng::seed_from_u64(24_0312), 40, false);
+        let rows = simulate_did_cc_sample(&mut Stream::seeded(24_0312), 40, false);
         let estimate = estimate_did_cc_robust(
             &rows,
             DidCcConfig {

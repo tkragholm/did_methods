@@ -204,6 +204,9 @@ pub struct RelativeMagnitudeConfidenceSetConfig {
     pub hybrid: RelativeMagnitudeHybrid,
     /// First-stage hybrid size parameter `κ`.
     pub hybrid_kappa: f64,
+    /// Number of simulated draws behind the least-favorable critical value.
+    /// The default is 1,000, the value `HonestDiD` uses. The seed is fixed at 0.
+    pub least_favorable_draws: usize,
 }
 
 impl RelativeMagnitudeConfidenceSetConfig {
@@ -231,6 +234,7 @@ impl RelativeMagnitudeConfidenceSetConfig {
         Self {
             hybrid: RelativeMagnitudeHybrid::LeastFavorable,
             hybrid_kappa: (1.0 - inference.confidence_level) / 10.0,
+            least_favorable_draws: 1_000,
         }
     }
 
@@ -243,6 +247,9 @@ impl RelativeMagnitudeConfidenceSetConfig {
         let alpha = 1.0 - inference.confidence_level;
         if !self.hybrid_kappa.is_finite() {
             return Err("relative-magnitude hybrid_kappa must be finite".to_string());
+        }
+        if self.least_favorable_draws == 0 {
+            return Err("relative-magnitude least_favorable_draws must be positive".to_string());
         }
         if !(0.0..=alpha).contains(&self.hybrid_kappa) {
             return Err(format!(

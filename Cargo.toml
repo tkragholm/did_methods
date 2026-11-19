@@ -22,17 +22,15 @@ hotpath-alloc = ["hotpath", "hotpath/hotpath-alloc"]
 [dependencies]
 bon = "3"
 clarabel = { version = "0.11.1", optional = true }
-# Shared numerical crates. epistat-optim is a git dependency pinned by `rev`
-# until it is on crates.io.
-epistat-inference = "0.1.1"
-epistat-linalg = "0.1"
-epistat-optim = { git = "https://github.com/tkragholm/epistat", rev = "adc88bfcfff123f2951bd6a44ab2a35a85d414a8" }
-epistat-rng = "0.1"
-epistat-stats = "0.1.1"
+# Shared numerical crates, all from one epistat commit.
+epistat-inference = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1" }
+epistat-linalg = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1" }
+epistat-optim = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1" }
+epistat-rng = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1", features = ["rand"] }
+epistat-stats = { git = "https://github.com/tkragholm/epistat", rev = "a6101e76736cfa3eeba71bf9e0f9e798a31edcd1" }
 dyn-stack = "0.13.2"
 faer = { version = "0.24.0", features = ["nightly", "perf-warn"] }
 itertools = "0.14"
-rand = "0.10.0"
 rayon = "1.11.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
@@ -43,6 +41,7 @@ once_map = "0.4.23"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false }
+rand = "0.10.0"
 rand_distr = "0.6.0"
 rstest = "0.26"
 proptest = "1.6.0"

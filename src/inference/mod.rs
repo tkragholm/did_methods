@@ -256,7 +256,7 @@ pub fn inverse_standard_normal_cdf(p: f64) -> f64 {
 mod tests {
     use super::*;
     use crate::util::usize_to_f64;
-    use rand::{SeedableRng, rngs::StdRng};
+    use epistat_rng::Stream;
 
     fn multiplier_bootstrap_ci_sorted_reference(
         estimate: f64,
@@ -281,7 +281,7 @@ mod tests {
         (lower, upper)
     }
 
-    fn rademacher_perturbation_scalar(influence_function: &[f64], rng: &mut StdRng) -> f64 {
+    fn rademacher_perturbation_scalar(influence_function: &[f64], rng: &mut Stream) -> f64 {
         use rand::RngExt;
 
         influence_function.iter().fold(0.0, |acc, value| {
@@ -470,7 +470,7 @@ mod tests {
         let seed_scalar = 1_337u64;
         let seed_bitpacked = 7_331u64;
 
-        let mut scalar_rng = StdRng::seed_from_u64(seed_scalar);
+        let mut scalar_rng = Stream::seeded(seed_scalar);
         let scalar_draws = (0..reps)
             .map(|_| rademacher_perturbation_scalar(&influence, &mut scalar_rng))
             .collect::<Vec<_>>();

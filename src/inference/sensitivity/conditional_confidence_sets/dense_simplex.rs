@@ -13,7 +13,8 @@ mod tests {
     use clarabel::solver::{
         DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
     };
-    use rand::{RngExt, SeedableRng, rngs::StdRng};
+    use epistat_rng::Stream;
+    use rand::RngExt;
 
     use super::super::super::linear_algebra::build_clarabel_matrix;
     use super::{DenseSimplex, LpError};
@@ -62,7 +63,7 @@ mod tests {
 
     /// Costs that keep `max c'λ` bounded on these columns: each `c_j` sits
     /// below `a_j'y` for one `y`, so `y` is dual feasible.
-    fn bounded_cost(rng: &mut StdRng, columns: &[Vec<f64>], m: usize) -> Vec<f64> {
+    fn bounded_cost(rng: &mut Stream, columns: &[Vec<f64>], m: usize) -> Vec<f64> {
         let y: Vec<f64> = (0..m).map(|_| rng.random_range(-1.0..1.0)).collect();
         columns
             .iter()
@@ -74,7 +75,7 @@ mod tests {
     }
 
     fn random_feasible_problem(
-        rng: &mut StdRng,
+        rng: &mut Stream,
         m: usize,
         n: usize,
     ) -> (Vec<Vec<f64>>, Vec<f64>, Vec<f64>) {
@@ -97,7 +98,7 @@ mod tests {
 
     #[test]
     fn matches_clarabel_on_random_feasible_bounded_programs() {
-        let mut rng = StdRng::seed_from_u64(20260904);
+        let mut rng = Stream::seeded(20260904);
         for trial in 0..200 {
             let m = rng.random_range(2..9);
             let n = rng.random_range(m..m + 24);
@@ -132,7 +133,7 @@ mod tests {
 
     #[test]
     fn warm_start_after_a_cost_change_matches_a_cold_solve() {
-        let mut rng = StdRng::seed_from_u64(7);
+        let mut rng = Stream::seeded(7);
         for _ in 0..100 {
             let m = rng.random_range(2..8);
             let n = rng.random_range(m + 2..m + 20);
@@ -172,7 +173,7 @@ mod tests {
     fn survives_a_degenerate_start_and_many_pivots() {
         // g = e_0 is the production shape: every artificial but one starts at
         // zero, so phase one is degenerate from the first pivot.
-        let mut rng = StdRng::seed_from_u64(99);
+        let mut rng = Stream::seeded(99);
         for _ in 0..50 {
             let m = 20;
             let n = 40;

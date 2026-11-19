@@ -15,11 +15,11 @@
 //! - Andrews, I., Roth, J., and Pakes, A. (2022). "Inference for Linear
 //!   Conditional Moment Inequalities". *Econometrica* 90(5), 2345-2377.
 
-use rand::{SeedableRng, rngs::StdRng};
+use epistat_rng::{Stream, replicate_seed};
 use rayon::prelude::*;
 
 use super::super::linear_algebra::{
-    cholesky_lower, draw_standard_normal_vec_into, lower_mat_vec_mul_into, simulation_draw_seed,
+    cholesky_lower, draw_standard_normal_vec_into, lower_mat_vec_mul_into,
 };
 use super::ConditionalMomentLpWorkspace;
 use crate::util::usize_to_f64;
@@ -118,7 +118,7 @@ pub(in crate::inference::sensitivity) fn simulation_draws(
             .for_each_init(
                 || (vec![0.0; dim], vec![0.0; dim]),
                 |(z, xi), (draw_idx, y)| {
-                    let mut rng = StdRng::seed_from_u64(simulation_draw_seed(seed, draw_idx));
+                    let mut rng = Stream::seeded(replicate_seed(seed, draw_idx as u64));
                     draw_standard_normal_vec_into(&mut rng, z);
                     lower_mat_vec_mul_into(&chol, z, xi);
                     y.iter_mut().zip(xi.iter()).for_each(|(y_value, xi_value)| {
@@ -129,7 +129,7 @@ pub(in crate::inference::sensitivity) fn simulation_draws(
     } else {
         let mut z = vec![0.0; dim];
         let mut xi = vec![0.0; dim];
-        let mut rng = StdRng::seed_from_u64(seed);
+        let mut rng = Stream::seeded(seed);
         for y in draws.chunks_exact_mut(dim) {
             draw_standard_normal_vec_into(&mut rng, &mut z);
             lower_mat_vec_mul_into(&chol, &z, &mut xi);

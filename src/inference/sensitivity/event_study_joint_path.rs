@@ -200,6 +200,7 @@ pub(in crate::inference::sensitivity::event_study_assessment) fn assess_honest_e
     let relative_magnitude_pointwise_config = RelativeMagnitudeConfidenceSetConfig {
         hybrid: relative_magnitude_config.hybrid,
         hybrid_kappa: pointwise_relative_magnitude_config.hybrid_kappa,
+        least_favorable_draws: relative_magnitude_config.least_favorable_draws,
     };
     let points = input
         .post_periods

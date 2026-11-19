@@ -311,6 +311,7 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
                             RelativeMagnitudeConfidenceSetConfig {
                                 hybrid: relative_magnitude_config.hybrid,
                                 hybrid_kappa: pointwise_relative_magnitude_config.hybrid_kappa,
+ least_favorable_draws: relative_magnitude_config.least_favorable_draws,
                             },
                             &prepared.branches,
                             &prepared.input_branches,
@@ -325,6 +326,7 @@ pub(in crate::inference::sensitivity) fn assess_honest_event_study_directional_r
                         RelativeMagnitudeConfidenceSetConfig {
                             hybrid: relative_magnitude_config.hybrid,
                             hybrid_kappa: pointwise_relative_magnitude_config.hybrid_kappa,
+ least_favorable_draws: relative_magnitude_config.least_favorable_draws,
                         },
                         &prepared.branches,
                         &prepared.input_branches,

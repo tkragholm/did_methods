@@ -497,6 +497,7 @@ where
                 alpha,
                 hybrid: config.hybrid,
                 hybrid_kappa: config.hybrid_kappa,
+                least_favorable_draws: config.least_favorable_draws,
                 grid: &grid,
                 anchor_idx,
             };
@@ -657,6 +658,7 @@ pub(in crate::inference::sensitivity) fn prepare_relative_magnitude_family_draws
     input: &HonestEventStudyInput,
     mbar: f64,
     family: RelativeMagnitudeFamily,
+    draws: usize,
 ) -> Result<Vec<Vec<f64>>, String> {
     let num_pre = input.num_pre_periods();
     let num_post = input.num_post_periods();
@@ -673,7 +675,7 @@ pub(in crate::inference::sensitivity) fn prepare_relative_magnitude_family_draws
         .map(|(s, max_positive)| {
             let inequality_matrix =
                 family.build_constraint_matrix(num_pre, num_post, mbar, s, max_positive)?;
-            prepare_relative_magnitude_branch_draws(input, num_pre, &inequality_matrix)
+            prepare_relative_magnitude_branch_draws(input, num_pre, &inequality_matrix, draws)
         })
         .collect()
 }

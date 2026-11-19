@@ -63,6 +63,7 @@ pub(in crate::inference::sensitivity) struct RelativeMagnitudeConditionalBranch<
     pub(in crate::inference::sensitivity) alpha: f64,
     pub(in crate::inference::sensitivity) hybrid: RelativeMagnitudeHybrid,
     pub(in crate::inference::sensitivity) hybrid_kappa: f64,
+    pub(in crate::inference::sensitivity) least_favorable_draws: usize,
     pub(in crate::inference::sensitivity) grid: &'a [f64],
     pub(in crate::inference::sensitivity) anchor_idx: usize,
 }
@@ -77,14 +78,25 @@ pub(in crate::inference::sensitivity) struct RelativeMagnitudePreparedFunctional
     pub(in crate::inference::sensitivity) a_target_arp: Vec<f64>,
     pub(in crate::inference::sensitivity) x_arp: Vec<Vec<f64>>,
     pub(in crate::inference::sensitivity) w_t: Vec<Vec<f64>>,
-    least_favorable_cv_cache: OnceMap<u64, Result<f64, String>>,
+    least_favorable_cv_cache: OnceMap<(u64, usize), Result<f64, String>>,
 }
 
 impl RelativeMagnitudePreparedFunctionalBranch {
-    fn least_favorable_cv(&self, sigma_arp: &[Vec<f64>], hybrid_kappa: f64) -> Result<f64, String> {
-        let cache_key = normalized_f64_bits(hybrid_kappa);
+    fn least_favorable_cv(
+        &self,
+        sigma_arp: &[Vec<f64>],
+        hybrid_kappa: f64,
+        draws: usize,
+    ) -> Result<f64, String> {
+        let cache_key = (normalized_f64_bits(hybrid_kappa), draws);
         self.least_favorable_cv_cache.insert_cloned(cache_key, |_| {
-            compute_least_favorable_cv_uncached(&self.x_arp, sigma_arp, hybrid_kappa, 1_000, 0)
+            compute_least_favorable_cv_uncached(
+                &self.x_arp,
+                sigma_arp,
+                hybrid_kappa,
+                draws,
+                LEAST_FAVORABLE_SEED,
+            )
         })
     }
 }
@@ -567,8 +579,11 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
                 least_favorable_cv_cache: OnceMap::new(),
             };
             let lf_cv = match config.hybrid {
-                RelativeMagnitudeHybrid::LeastFavorable => prepared_functional
-                    .least_favorable_cv(&prepared_input.sigma_arp, config.hybrid_kappa)?,
+                RelativeMagnitudeHybrid::LeastFavorable => prepared_functional.least_favorable_cv(
+                    &prepared_input.sigma_arp,
+                    config.hybrid_kappa,
+                    config.least_favorable_draws,
+                )?,
                 RelativeMagnitudeHybrid::ArpOnly => f64::INFINITY,
             };
             Ok((prepared_functional, lf_cv))
@@ -745,8 +760,11 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
         // licence to skip it.
         let anchor_idx = branch_anchor_idx(&grid, original.estimate, branch_identified.as_ref());
         let lf_cv = match config.hybrid {
-            RelativeMagnitudeHybrid::LeastFavorable => prepared_functional
-                .least_favorable_cv(&prepared_input.sigma_arp, config.hybrid_kappa)?,
+            RelativeMagnitudeHybrid::LeastFavorable => prepared_functional.least_favorable_cv(
+                &prepared_input.sigma_arp,
+                config.hybrid_kappa,
+                config.least_favorable_draws,
+            )?,
             RelativeMagnitudeHybrid::ArpOnly => f64::INFINITY,
         };
         let (range, diagnostics) = compute_relative_magnitude_branch_accepted_range_for_branch(
@@ -815,8 +833,11 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_confidence_s
         .zip(prepared_input_branches.iter())
     {
         let lf_cv = match config.hybrid {
-            RelativeMagnitudeHybrid::LeastFavorable => prepared_functional
-                .least_favorable_cv(&prepared_input.sigma_arp, config.hybrid_kappa)?,
+            RelativeMagnitudeHybrid::LeastFavorable => prepared_functional.least_favorable_cv(
+                &prepared_input.sigma_arp,
+                config.hybrid_kappa,
+                config.least_favorable_draws,
+            )?,
             RelativeMagnitudeHybrid::ArpOnly => f64::INFINITY,
         };
         let mut evaluator = RelativeMagnitudeThetaEvaluator::new(
@@ -861,15 +882,15 @@ pub(in crate::inference::sensitivity) fn prepare_relative_magnitude_branch_draws
     input: &HonestEventStudyInput,
     num_pre: usize,
     a_matrix: &[Vec<f64>],
+    draws: usize,
 ) -> Result<Vec<f64>, String> {
     let rows_for_arp = find_post_period_constraint_rows(a_matrix, num_pre);
     let sigma_y = sandwich_covariance(a_matrix, &input.covariance);
     let sigma_arp = super::super::linear_algebra::subset_square_matrix(&sigma_y, &rows_for_arp);
-    simulation_draws(&sigma_arp, LEAST_FAVORABLE_SIMS, LEAST_FAVORABLE_SEED)
+    simulation_draws(&sigma_arp, draws, LEAST_FAVORABLE_SEED)
 }
 
-/// Draw count and seed of every least-favorable simulation on this path.
-const LEAST_FAVORABLE_SIMS: usize = 1_000;
+/// Seed of every least-favorable simulation on this path.
 const LEAST_FAVORABLE_SEED: u64 = 0;
 
 /// `shared_draws` are this branch's draws from
@@ -914,7 +935,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_branch_accep
             &x_arp,
             &sigma_arp,
             branch_problem.hybrid_kappa,
-            LEAST_FAVORABLE_SIMS,
+            branch_problem.least_favorable_draws,
             LEAST_FAVORABLE_SEED,
         )?,
         (RelativeMagnitudeHybrid::ArpOnly, _) => f64::INFINITY,

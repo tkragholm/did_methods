@@ -472,6 +472,7 @@ pub(in crate::inference::sensitivity) fn compute_relative_magnitude_multi_flci_w
     let pointwise_config = RelativeMagnitudeConfidenceSetConfig {
         hybrid: config.hybrid,
         hybrid_kappa: pointwise_default.hybrid_kappa,
+        least_favorable_draws: config.least_favorable_draws,
     };
     if prepared_functional_branch_sets.len() != problem.post_weight_sets.len() {
         return Err(format!(

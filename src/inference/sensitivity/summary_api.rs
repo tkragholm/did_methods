@@ -506,9 +506,14 @@ pub fn summarize_relative_magnitude_sensitivity_many(
             ));
         }
         let shared_draws = match config.hybrid {
-            RelativeMagnitudeHybrid::LeastFavorable => Some(
-                prepare_relative_magnitude_family_draws(input, mbar, family)?,
-            ),
+            RelativeMagnitudeHybrid::LeastFavorable => {
+                Some(prepare_relative_magnitude_family_draws(
+                    input,
+                    mbar,
+                    family,
+                    config.least_favorable_draws,
+                )?)
+            }
             RelativeMagnitudeHybrid::ArpOnly => None,
         };
         let at_this_mbar = functionals

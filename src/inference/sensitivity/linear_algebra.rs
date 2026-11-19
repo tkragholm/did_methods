@@ -1,12 +1,12 @@
 use clarabel::algebra::CscMatrix;
 use dyn_stack::{MemBuffer, MemStack};
+use epistat_rng::{Stream, replicate_seed};
 use epistat_stats::normal;
 use faer::linalg::cholesky::llt;
 use faer::linalg::cholesky::llt::factor::LltRegularization;
 use faer::linalg::matmul::matmul;
 use faer::prelude::Solve;
 use faer::{Accum, Mat, MatMut, MatRef, Par, Side, Spec};
-use rand::{RngExt, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 
 use crate::util::usize_to_f64;
@@ -152,7 +152,7 @@ fn try_dense_cholesky_with_diagonal_jitter(
     None
 }
 
-pub(super) fn draw_standard_normal_vec(rng: &mut StdRng, len: usize) -> Vec<f64> {
+pub(super) fn draw_standard_normal_vec(rng: &mut Stream, len: usize) -> Vec<f64> {
     let mut out = vec![0.0; len];
     draw_standard_normal_vec_into(rng, &mut out);
     out
@@ -229,8 +229,7 @@ pub(super) fn simulated_lower_cholesky_maxima_batched(
                 let start = chunk_idx * SENSITIVITY_BATCHED_CHUNK_SIZE;
                 for local_idx in 0..SENSITIVITY_BATCHED_CHUNK_SIZE {
                     let draw_idx = start + local_idx;
-                    let mut rng =
-                        StdRng::seed_from_u64(simulation_draw_seed(simulation_seed, draw_idx));
+                    let mut rng = Stream::seeded(replicate_seed(simulation_seed, draw_idx as u64));
                     draw_standard_normal_vec_into(&mut rng, draw_vec);
                     for row in 0..dim {
                         z[(row, local_idx)] = draw_vec[row];
@@ -258,7 +257,7 @@ pub(super) fn simulated_lower_cholesky_maxima_batched(
         let mut draw = vec![0.0; dim];
         for (local_idx, out) in maxima[tail_start..].iter_mut().enumerate() {
             let draw_idx = tail_start + local_idx;
-            let mut rng = StdRng::seed_from_u64(simulation_draw_seed(simulation_seed, draw_idx));
+            let mut rng = Stream::seeded(replicate_seed(simulation_seed, draw_idx as u64));
             draw_standard_normal_vec_into(&mut rng, &mut z);
             lower_mat_vec_mul_into(chol, &z, &mut draw);
             *out = draw.iter().map(|value| value.abs()).fold(0.0, f64::max);
@@ -278,8 +277,7 @@ pub(super) fn simulated_lower_cholesky_maxima_scalar(
         .map_init(
             || (vec![0.0; dim], vec![0.0; dim]),
             |(z, draw), draw_idx| {
-                let mut rng =
-                    StdRng::seed_from_u64(simulation_draw_seed(simulation_seed, draw_idx));
+                let mut rng = Stream::seeded(replicate_seed(simulation_seed, draw_idx as u64));
                 draw_standard_normal_vec_into(&mut rng, z);
                 lower_mat_vec_mul_into(chol, z, draw);
                 draw.iter().map(|value| value.abs()).fold(0.0, f64::max)
@@ -302,35 +300,27 @@ pub(super) fn post_covariance_block(
         .collect()
 }
 
-pub(super) fn draw_standard_normal_vec_into(rng: &mut StdRng, out: &mut [f64]) {
+pub(super) fn draw_standard_normal_vec_into(rng: &mut Stream, out: &mut [f64]) {
     draw_standard_normal_vec_into_cached(rng, out);
 }
 
-pub(super) const fn simulation_draw_seed(base_seed: u64, draw_idx: usize) -> u64 {
-    let idx = draw_idx as u64;
-    let mut z = base_seed.wrapping_add(0x9E37_79B9_7F4A_7C15u64.wrapping_mul(idx + 1));
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
-fn draw_standard_normal(rng: &mut StdRng) -> f64 {
-    let u1 = rng.random::<f64>().max(f64::MIN_POSITIVE);
-    let u2 = rng.random::<f64>();
+fn draw_standard_normal(rng: &mut Stream) -> f64 {
+    let u1 = rng.uniform().max(f64::MIN_POSITIVE);
+    let u2 = rng.uniform();
     (-2.0_f64 * u1.ln()).sqrt() * (2.0_f64 * std::f64::consts::PI * u2).cos()
 }
 
-pub(super) fn draw_standard_normal_vec_into_scalar(rng: &mut StdRng, out: &mut [f64]) {
+pub(super) fn draw_standard_normal_vec_into_scalar(rng: &mut Stream, out: &mut [f64]) {
     for value in out {
         *value = draw_standard_normal(rng);
     }
 }
 
-pub(super) fn draw_standard_normal_vec_into_cached(rng: &mut StdRng, out: &mut [f64]) {
+pub(super) fn draw_standard_normal_vec_into_cached(rng: &mut Stream, out: &mut [f64]) {
     let mut index = 0usize;
     while index + 1 < out.len() {
-        let u1 = rng.random::<f64>().max(f64::MIN_POSITIVE);
-        let u2 = rng.random::<f64>();
+        let u1 = rng.uniform().max(f64::MIN_POSITIVE);
+        let u2 = rng.uniform();
         let radius = (-2.0_f64 * u1.ln()).sqrt();
         let theta = 2.0_f64 * std::f64::consts::PI * u2;
         out[index] = radius * theta.cos();
@@ -713,7 +703,7 @@ pub(super) fn truncated_normal_quantile(p: f64, l: f64, u: f64) -> Result<f64, S
 #[cfg(test)]
 mod tests {
     use super::{draw_standard_normal_vec_into_cached, draw_standard_normal_vec_into_scalar};
-    use rand::{SeedableRng, rngs::StdRng};
+    use epistat_rng::Stream;
 
     fn mean_and_variance(sample: &[f64]) -> (f64, f64) {
         let n = crate::util::usize_to_f64(sample.len());
@@ -734,12 +724,12 @@ mod tests {
         let seed = 42_042_u64;
         let len = 20_001usize;
 
-        let mut scalar_rng = StdRng::seed_from_u64(seed);
+        let mut scalar_rng = Stream::seeded(seed);
         let mut scalar = vec![0.0; len];
         draw_standard_normal_vec_into_scalar(&mut scalar_rng, &mut scalar);
         let (scalar_mean, scalar_var) = mean_and_variance(&scalar);
 
-        let mut cached_rng = StdRng::seed_from_u64(seed);
+        let mut cached_rng = Stream::seeded(seed);
         let mut cached = vec![0.0; len];
         draw_standard_normal_vec_into_cached(&mut cached_rng, &mut cached);
         let (cached_mean, cached_var) = mean_and_variance(&cached);

@@ -1,5 +1,5 @@
 use epistat_optim::nelder_mead::NelderMead;
-use rand::{SeedableRng, rngs::StdRng};
+use epistat_rng::Stream;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::time::Instant;
@@ -245,7 +245,7 @@ fn generate_optimization_surface_directions(
     }
 
     if config.random_unit_directions > 0 {
-        let mut rng = StdRng::seed_from_u64(config.random_seed);
+        let mut rng = Stream::seeded(config.random_seed);
         for _ in 0..config.random_unit_directions {
             let raw = draw_standard_normal_vec(&mut rng, num_post);
             if let Some(unit) = canonicalize_unit_direction(&raw) {

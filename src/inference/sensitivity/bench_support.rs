@@ -1,11 +1,11 @@
-use rand::{SeedableRng, rngs::StdRng};
+use epistat_rng::Stream;
 
 use super::{linear_algebra, relative_magnitude};
 
 #[doc(hidden)]
 #[must_use]
 pub fn benchmark_sensitivity_normal_draws(count: usize, seed: u64) -> f64 {
-    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rng = Stream::seeded(seed);
     let mut out = vec![0.0; count];
     linear_algebra::draw_standard_normal_vec_into(&mut rng, &mut out);
     out.iter().sum()
@@ -14,7 +14,7 @@ pub fn benchmark_sensitivity_normal_draws(count: usize, seed: u64) -> f64 {
 #[doc(hidden)]
 #[must_use]
 pub fn benchmark_sensitivity_normal_draws_scalar(count: usize, seed: u64) -> f64 {
-    let mut rng = StdRng::seed_from_u64(seed);
+    let mut rng = Stream::seeded(seed);
     let mut out = vec![0.0; count];
     linear_algebra::draw_standard_normal_vec_into_scalar(&mut rng, &mut out);
     out.iter().sum()

@@ -309,7 +309,8 @@ mod tests {
     use clarabel::solver::{
         DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
     };
-    use rand::{RngExt, SeedableRng, rngs::StdRng};
+    use epistat_rng::Stream;
+    use rand::RngExt;
 
     use super::super::super::linear_algebra::{
         build_clarabel_matrix, dense_rows_to_csc, diag_sqrt, dot,
@@ -408,7 +409,7 @@ mod tests {
 
     #[test]
     fn conditional_workspace_matches_clarabel_with_nuisance_columns_across_rhs_changes() {
-        let mut rng = StdRng::seed_from_u64(20260905);
+        let mut rng = Stream::seeded(20260905);
         for _ in 0..40 {
             let rows = rng.random_range(6..30);
             let k = rng.random_range(1..rows.min(8));

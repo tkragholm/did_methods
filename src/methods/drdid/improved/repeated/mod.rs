@@ -113,7 +113,7 @@ mod tests {
     use super::*;
     use crate::methods::drdid::improved::estimate_drdid_improved_panel;
     use crate::types::{DidCell, DrDidObservation, TimePeriod, TreatmentGroup};
-    use rand::{RngExt, SeedableRng, rngs::StdRng};
+    use epistat_rng::Stream;
 
     fn row(treated: bool, post_period: bool, outcome: f64, x1: f64) -> DrDidRepeatedObservation {
         DrDidRepeatedObservation {
@@ -128,9 +128,9 @@ mod tests {
         }
     }
 
-    fn draw_standard_normal(rng: &mut StdRng) -> f64 {
-        let u1 = rng.random::<f64>().max(f64::MIN_POSITIVE);
-        let u2 = rng.random::<f64>();
+    fn draw_standard_normal(rng: &mut Stream) -> f64 {
+        let u1 = rng.uniform().max(f64::MIN_POSITIVE);
+        let u2 = rng.uniform();
         (-2.0_f64 * u1.ln()).sqrt() * (2.0_f64 * std::f64::consts::PI * u2).cos()
     }
 
@@ -139,7 +139,7 @@ mod tests {
     }
 
     fn simulate_repeated_cross_section(
-        rng: &mut StdRng,
+        rng: &mut Stream,
         n_per_period: usize,
         true_att: f64,
     ) -> Vec<DrDidRepeatedObservation> {
@@ -148,7 +148,7 @@ mod tests {
             for _ in 0..n_per_period {
                 let x = draw_standard_normal(rng);
                 let p_treat = logistic(0.5f64.mul_add(x, -0.3)).clamp(0.05, 0.95);
-                let treated = rng.random::<f64>() < p_treat;
+                let treated = rng.uniform() < p_treat;
                 let noise = draw_standard_normal(rng);
                 let time_trend = if post_period { 0.75 } else { 0.0 };
                 let treatment_effect = if treated && post_period {
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn estimates_improved_repeated_cross_section_att() {
-        let mut rng = StdRng::seed_from_u64(20_260_309);
+        let mut rng = Stream::seeded(20_260_309);
         let rows = simulate_repeated_cross_section(&mut rng, 2_000, 2.5);
         let config = DrDidConfig::builder()
             .bootstrap_reps(199)

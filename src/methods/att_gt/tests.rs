@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use rand::{RngExt, SeedableRng, rngs::StdRng};
+use epistat_rng::Stream;
+use rand::RngExt;
 
 use crate::inference::{quantile_sorted, standard_error_from_influence};
 use crate::types::{
@@ -22,14 +23,14 @@ fn reference_bands_sorted_quantile(
     estimates: &[AttGtEstimate],
     config: AttGtBandConfig,
 ) -> Vec<AttGtBandEstimate> {
-    let mut rng = StdRng::seed_from_u64(config.seed);
+    let mut rng = Stream::seeded(config.seed);
     let mut maxima = Vec::with_capacity(config.reps);
     let k = estimates.len();
     for _ in 0..config.reps {
         let mut max_abs = 0.0_f64;
         for _ in 0..k {
-            let u1 = rng.random::<f64>().max(f64::MIN_POSITIVE);
-            let u2 = rng.random::<f64>();
+            let u1 = rng.uniform().max(f64::MIN_POSITIVE);
+            let u2 = rng.uniform();
             let z = (-2.0_f64 * u1.ln()).sqrt() * (2.0_f64 * std::f64::consts::PI * u2).cos();
             max_abs = max_abs.max(z.abs());
         }
@@ -66,7 +67,7 @@ fn reference_bands_with_influence_sorted_quantile(
         .iter()
         .map(|influence| standard_error_from_influence(influence))
         .collect::<Vec<_>>();
-    let mut rng = StdRng::seed_from_u64(config.seed);
+    let mut rng = Stream::seeded(config.seed);
     let mut maxima = Vec::with_capacity(config.reps);
     let mut signs = vec![1.0; n];
     for _ in 0..config.reps {
